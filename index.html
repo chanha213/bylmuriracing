@@ -215,7 +215,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, runTransaction, collection, query, where, onSnapshot, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, serverTimestamp, runTransaction, collection, query, where, onSnapshot, updateDoc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyATM_3weFyRCGGVq6b2nlSaW0Gd9zDP3hA",
@@ -365,6 +365,7 @@ function buildMap(src, sw, sh, bg, kIn, flat) {
 
 /* ===================== 상태 =====================*/
 let map = null, mapDef = null, selectedId = MAPS[0].id;
+let ghostOpponent = null;
 let mode = 'menu';              // menu | countdown | race
 const keys = { left:false,right:false,gas:false,brake:false,hand:false,boost:false };
 let boostMeter = 1, boosting = false;
@@ -381,7 +382,7 @@ let reverseWarningActive = false;
 
 /* ===================== 저장/공유 =====================*/
 const LS = 'droneRacer.v1';
-let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'avanteN', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['avanteN'], missionClaims:{} };
+let me = { nick:'', bests:{}, dist:{}, laps:{}, ghosts:{}, vehicleColor:'#2563eb', vehicleModel:'avanteN', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['avanteN'], missionClaims:{} };
 try { const s = JSON.parse(localStorage.getItem(LS)||'null'); if (s) me = Object.assign(me, s); } catch(e){}
 const LEGACY_VEHICLE_IDS = { street:'avanteN', rally:'stinger', super:'gt3' };
 const migrateVehicleId = id => LEGACY_VEHICLE_IDS[id] || id;
@@ -390,6 +391,7 @@ me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
 me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['avanteN', ...me.ownedVehicles.map(migrateVehicleId)])] : ['avanteN'];
 if (['avanteN','stinger','gt3','huracan'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
 me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
+me.ghosts = me.ghosts && typeof me.ghosts === 'object' ? me.ghosts : {};
 if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
 if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
 const persistLocal = () => { try { localStorage.setItem(LS, JSON.stringify(me)); } catch(e){} };
@@ -522,10 +524,10 @@ function renderWallet() {
   if ($('garageCoins')) $('garageCoins').textContent = '보유 코인 ' + me.coins.toLocaleString('ko-KR');
   if ($('shopCoins')) $('shopCoins').textContent = '보유 코인 ' + me.coins.toLocaleString('ko-KR');
 }
-function paintVehicle(g, scale=1, modelId=me.vehicleModel) {
+function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null) {
   g.save(); g.scale(scale, scale);
   const id = modelId || 'avanteN';
-  const L=92, W=42, color=me.vehicleColor||'#2563eb';
+  const L=92, W=42, color=colorOverride||me.vehicleColor||'#2563eb';
   const isStinger=id==='stinger', isGT3=id==='gt3', isHuracan=id==='huracan';
   // 각 차종의 실제 비례를 반영한 차체 실루엣
   const bodyPath=(inset=0)=>{
@@ -829,11 +831,75 @@ async function startRace() {
   const def = MAPS.find(m => m.id === selectedId);
   if (!def) { showErr('맵을 찾을 수 없어요.'); return; }
   $('start').disabled = true; $('start').textContent = '맵 분석 중…';
-  try { map = await getMap(def); mapDef = def; }
+  try { map = await getMap(def); mapDef = def; await loadGhostForMap(def.id); }
   catch (e) { showErr(e.message || '맵을 불러오지 못했어요.'); return; }
   finally { $('start').disabled = false; $('start').textContent = '레이스 시작'; }
   $('result').style.display = 'none'; resetCar(); $('menu').style.display = 'none'; $('menuBtn').style.display = 'block'; mode = 'countdown'; cdT = 3.2;
   if (matchMedia('(pointer:coarse)').matches) $('touch').style.display = 'block';
+}
+async function loadGhostForMap(mapId) {
+  ghostOpponent = null;
+  const own = me.ghosts && me.ghosts[mapId] ? me.ghosts[mapId] : null;
+  let candidates = [];
+  const user = firebaseAuth.currentUser;
+  if (user) {
+    try {
+      const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId),limit(20)));
+      snap.forEach(d => candidates.push(d.data()));
+    } catch (e) { console.warn('고스트 기록을 불러오지 못했어요. Firestore 규칙을 확인해 주세요.',e); }
+  }
+  candidates = candidates.filter(g => Array.isArray(g.samples) && g.samples.length >= 2 && Number.isFinite(g.bestMs));
+  const rivals = candidates.filter(g => !user || g.uid !== user.uid).sort((a,b)=>a.bestMs-b.bestMs);
+  if (rivals.length) ghostOpponent = rivals[0];
+  else if (own && Array.isArray(own.samples) && own.samples.length >= 2) ghostOpponent = own;
+  else if (candidates.length) ghostOpponent = candidates.sort((a,b)=>a.bestMs-b.bestMs)[0];
+  if (ghostOpponent) toast('👻 '+(ghostOpponent.nickname||'레이서')+' 고스트와 대결 · '+fmt(ghostOpponent.bestMs),2200);
+}
+function saveGhostRecord(mapId, ms, samples) {
+  if (!Array.isArray(samples) || samples.length < 2) return;
+  const record = {
+    uid: firebaseAuth.currentUser ? firebaseAuth.currentUser.uid : 'local',
+    nickname: me.nick || '레이서',
+    mapId, bestMs: Math.round(ms),
+    vehicleModel: me.vehicleModel, vehicleColor: me.vehicleColor,
+    samples: samples.map(p=>({t:Math.round(p.t),x:Math.round(p.x*10)/10,y:Math.round(p.y*10)/10,a:Math.round(p.a*10000)/10000}))
+  };
+  const old = me.ghosts[mapId];
+  if (!old || record.bestMs < old.bestMs) {
+    me.ghosts[mapId] = record;
+    persistLocal();
+  }
+  const user = firebaseAuth.currentUser;
+  if (user) {
+    setDoc(doc(firestore,'ghosts',mapId+'_'+user.uid),record,{merge:true})
+      .then(()=>{ if (!ghostOpponent || record.bestMs < ghostOpponent.bestMs) ghostOpponent=record; })
+      .catch(e=>{console.error('고스트 업로드 실패:',e);toast('고스트 온라인 저장 실패 · Firestore 규칙을 확인해 주세요',2400);});
+  }
+}
+function ghostPositionAt(elapsedMs) {
+  const samples=ghostOpponent && ghostOpponent.samples;
+  if (!samples || !samples.length) return null;
+  if (elapsedMs <= samples[0].t) return samples[0];
+  for(let i=1;i<samples.length;i++){
+    const b=samples[i],a=samples[i-1];
+    if(elapsedMs<=b.t){
+      const f=(elapsedMs-a.t)/Math.max(1,b.t-a.t);
+      let da=((b.a-a.a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;
+      return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,a:a.a+da*f};
+    }
+  }
+  return samples[samples.length-1];
+}
+function drawGhostCar() {
+  if (!ghostOpponent || mode!=='race' || !lap.started) return;
+  const p=ghostPositionAt((raceT-lap.t0)*1000);
+  if(!p)return;
+  ctx.save();ctx.globalAlpha=.42;ctx.translate(p.x,p.y);ctx.rotate(p.a);
+  ctx.save();ctx.scale(CAR_L/92,CAR_W/42);
+  paintVehicle(ctx,1,ghostOpponent.vehicleModel||'avanteN',ghostOpponent.vehicleColor||'#22d3ee');
+  ctx.restore();
+  ctx.strokeStyle='#67e8f9';ctx.lineWidth=2.2;ctx.strokeRect(-CAR_L/2-2,-CAR_W/2-2,CAR_L+4,CAR_W+4);
+  ctx.restore();
 }
 function spawnTrackCoins() {
   trackCoins = []; trackFuel = []; raceCoins = 0;
@@ -906,6 +972,7 @@ function resetCar() {
   const warningEl = document.getElementById("reverseWarning"); if (warningEl) warningEl.classList.remove("on");
   lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, driftDirection:0, secretDrift:false, secretReverse:false, wrongWay:false, rewardGranted:false };
   spawnTrackCoins();
+  lap.ghostSamples=[]; lap.ghostSampleAt=100;
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
   raceT = 0; boostMeter = 1; boosting = false;
   trail = document.createElement('canvas'); trail.width = map.mw; trail.height = map.mh; tg = trail.getContext('2d'); tg.setTransform(1/map.k, 0, 0, 1/map.k, 0, 0);
@@ -1085,7 +1152,11 @@ function stepCar(dt, inputOK) {
 
 /* ===================== 랩 판정 =====================*/
 function updateLap(dt, moved, prevX, prevY) {
-  if (lap.started) { lap.dist += moved; lap.maxFar = Math.max(lap.maxFar, Math.hypot(car.x-map.g.x, car.y-map.g.y)); }
+  if (lap.started) {
+    lap.dist += moved; lap.maxFar = Math.max(lap.maxFar, Math.hypot(car.x-map.g.x, car.y-map.g.y));
+    const elapsed=(raceT-lap.t0)*1000;
+    if (elapsed >= (lap.ghostSampleAt||100) && lap.ghostSamples && lap.ghostSamples.length < 500) { lap.ghostSamples.push({t:elapsed,x:car.x,y:car.y,a:car.a}); lap.ghostSampleAt=elapsed+100; }
+  }
   // 체크포인트
   if (lap.started) map.cps.forEach((pts, i) => { if (lap.visited.has(i)) return;
     for (let k=0;k<pts.length;k+=2) if (Math.abs(pts[k][0]-car.x) < 34 && Math.abs(pts[k][1]-car.y) < 34) { lap.visited.add(i); break; } });
@@ -1113,12 +1184,15 @@ function updateLap(dt, moved, prevX, prevY) {
   if (crossed) {
     const frac = (-lap.prevS) / ((s - lap.prevS) || 1);          // 이번 스텝 안에서 선을 넘은 시점
     const tNow = raceT - dt*(1 - frac);
-    if (!lap.started) { lap.started = true; lap.t0 = tNow; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set(); toast('랩 타이머 시작'); }
+    if (!lap.started) { lap.started = true; lap.t0 = tNow; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set(); lap.ghostSamples=[{t:0,x:car.x,y:car.y,a:car.a}];lap.ghostSampleAt=100; toast('랩 타이머 시작'); }
     else {
       const okCp = map.cps.length ? lap.visited.size >= map.cps.length : (lap.dist > 1200 && lap.maxFar > map.maxDim*0.2);
       if (okCp) {
-        const ms = (tNow - lap.t0) * 1000; lap.t0 = tNow; lap.n++; lap.last = ms; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set();
+        const ms = (tNow - lap.t0) * 1000;
+        if (lap.ghostSamples && lap.ghostSamples.length) lap.ghostSamples.push({t:ms,x:car.x,y:car.y,a:car.a});
+        lap.n++; lap.last = ms; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set();
         lap.times.push(ms); onLap(ms, lap.n < LAPS);
+        lap.ghostSamples=[{t:0,x:car.x,y:car.y,a:car.a}];lap.ghostSampleAt=100;
         if (lap.n >= LAPS) finishRace();
       } else toast(map.cps.length ? '체크포인트를 지나지 않았어요' : '코스를 한 바퀴 돌아야 해요', 1600);
     }
@@ -1129,7 +1203,7 @@ function onLap(ms, saveNow=true) {
   if (mapDef.custom) { if (lap.best == null || ms < lap.best) { lap.best = ms; lap.pb = true; toast('연습 최고 랩 ' + fmt(ms)); } else toast('랩 ' + fmt(ms)); return; }
   const id = mapDef.id; me.laps[id] = (me.laps[id]||0) + 1;
   const prevBest = me.bests[id];
-  if (prevBest == null || ms < prevBest) { me.bests[id] = Math.round(ms); lap.best = Math.round(ms); lap.pb = true; toast('개인 최고 기록  ' + fmt(ms), 3000); }
+  if (prevBest == null || ms < prevBest) { me.bests[id] = Math.round(ms); lap.best = Math.round(ms); lap.pb = true; saveGhostRecord(id,ms,lap.ghostSamples||[]); toast('개인 최고 기록  ' + fmt(ms), 3000); }
   else toast('랩 ' + fmt(ms));
   me.dist[id] = (me.dist[id]||0) + unsavedDist * M_PER_PX; unsavedDist = 0;
   if (saveNow) pushMe(); else persistLocal();
@@ -1161,6 +1235,7 @@ function render() {
   if (sw > 0 && sh > 0) { const kk = map.k; ctx.drawImage(map.world, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); ctx.drawImage(trail, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); }
   drawTrackCoins();
   drawTrackFuel();
+  drawGhostCar();
   drawCar();
   ctx.restore();
 
