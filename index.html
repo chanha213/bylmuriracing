@@ -125,8 +125,6 @@
         <button class="btn ghost" id="openShop" type="button" style="margin-top:0">차량 상점</button>
       </div>
       <button class="btn" id="start">레이스 시작</button>
-      <button class="btn ghost" id="upload">내 맵 이미지로 연습하기</button>
-      <input type="file" id="file" accept="image/*" hidden>
       <div id="err"></div>
       <div id="help">자동 전진 &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> 브레이크 &nbsp; <kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> 조향<br><kbd>Space</kbd> 드리프트 &nbsp; <kbd>Shift</kbd> 부스트(게이지 소모)<br><kbd>R</kbd> 출발선으로 &nbsp; <kbd>C</kbd> 시점 전환 &nbsp; <kbd>Esc</kbd> 메뉴<br>모바일은 화면 아래 버튼을 쓰면 돼요.</div>
     </div>
@@ -326,7 +324,7 @@ function buildMap(src, sw, sh, bg, kIn, flat) {
 }
 
 /* ===================== 상태 =====================*/
-let map = null, mapDef = null, selectedId = MAPS[0].id, customDef = null;
+let map = null, mapDef = null, selectedId = MAPS[0].id;
 let mode = 'menu';              // menu | countdown | race
 const keys = { left:false,right:false,gas:false,brake:false,hand:false,boost:false };
 let boostMeter = 1, boosting = false;
@@ -621,8 +619,7 @@ const km = px => (px*M_PER_PX/1000);
 function totalDist() { return Object.values(me.dist).reduce((a,b)=>a+b,0); }
 function renderMaps() {
   mapsEl.textContent = '';
-  const all = MAPS.concat(customDef ? [customDef] : []);
-  all.forEach(m => {
+  MAPS.forEach(m => {
     const b = document.createElement('button'); b.className = 'map' + (m.id===selectedId ? ' sel':'');
     const n = document.createElement('div'); n.textContent = m.name;
     const s = document.createElement('span'); s.textContent = m.custom ? '연습용 · 기록 없음' : ('내 기록 ' + fmt(me.bests[m.id]));
@@ -632,7 +629,6 @@ function renderMaps() {
 function renderLB() {
   const tb = document.querySelector('#lb tbody'); tb.textContent = '';
   $('lbTitle').textContent = '리더보드 · ' + mapName(selectedId);
-  if (selectedId === 'custom') { const tr = tb.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.textContent = '연습용 맵은 기록이 저장되지 않아요.'; return; }
   const rows = {};
   Object.entries(players).forEach(([id,p]) => { if (p.bests && typeof p.bests[selectedId]==='number') rows[id] = { id, nick:p.nick||'Racer', best:p.bests[selectedId], dist:Object.values(p.dist||{}).reduce((a,b)=>a+b,0) }; });
   if (me.bests[selectedId] != null && (!uid || !rows[uid])) rows[uid||'__me'] = { id:uid||'__me', nick:me.nick, best:me.bests[selectedId], dist:totalDist() };
@@ -650,16 +646,17 @@ function showErr(t) { const e = $('err'); e.textContent = t || ''; e.style.displ
 const cache = {};
 function loadImage(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('이미지를 읽지 못했어요.')); im.src = src; }); }
 async function getMap(def) {
-  if (cache[def.id] && !def.custom) return cache[def.id];
+  if (cache[def.id]) return cache[def.id];
   let m;
   if (def.pts || def.polys) { const c = genShape(def); const bg = def.bg ? await loadImage(def.bg) : null; m = buildMap(c, c.width, c.height, bg, def.k, def.flat); m.zoom = def.zoom || 1; m.flat = !!def.flat; }
   else if (def.canvasSrc) { m = buildMap(def.canvasSrc, def.canvasSrc.width, def.canvasSrc.height); }
   else { const im = await loadImage(def.src); m = buildMap(im, im.naturalWidth, im.naturalHeight); }
-  if (!def.custom) cache[def.id] = m; return m;
+  cache[def.id] = m; return m;
 }
 async function startRace() {
   showErr('');
-  const def = selectedId === 'custom' ? customDef : MAPS.find(m => m.id === selectedId);
+  const def = MAPS.find(m => m.id === selectedId);
+  if (!def) { showErr('맵을 찾을 수 없어요.'); return; }
   $('start').disabled = true; $('start').textContent = '맵 분석 중…';
   try { map = await getMap(def); mapDef = def; }
   catch (e) { showErr(e.message || '맵을 불러오지 못했어요.'); return; }
@@ -669,7 +666,7 @@ async function startRace() {
 }
 function spawnTrackCoins() {
   trackCoins = []; raceCoins = 0;
-  if (!mapDef || mapDef.custom) return;
+  if (!mapDef) return;
   const target = 8, minSpacing = 105;
   for (let tries=0; tries<6000 && trackCoins.length<target; tries++) {
     const ix = Math.floor(Math.random()*map.mw), iy = Math.floor(Math.random()*map.mh);
@@ -715,9 +712,9 @@ function claimMission(key, amount) {
 function finishRace() {
   mode = 'finish'; flushDist(false); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
   const tot = lap.times.reduce((a,b)=>a+b,0), bestRun = Math.min(...lap.times);
-  let reward = mapDef.custom ? 0 : 30 + raceCoins;
-  const rewardParts = mapDef.custom ? ['연습 맵 · 보상 없음'] : ['완주 +30', '코인 수집 +' + raceCoins];
-  if (!mapDef.custom && mapDef.id === 'hoecho') {
+  let reward = 30 + raceCoins;
+  const rewardParts = ['완주 +30', '코인 수집 +' + raceCoins];
+  if (mapDef.id === 'hoecho') {
     if (lap.times.some(t=>t<=10000)) {
       const n=claimMission('hoecho_sub10_lap',100); if(n){reward+=n;rewardParts.push('10초 이내 랩 최초 달성 +'+n);}
     }
@@ -725,16 +722,16 @@ function finishRace() {
       const n=claimMission('hoecho_all3_sub10',400); if(n){reward+=n;rewardParts.push('3랩 모두 10초 이내 +'+n);}
     }
   }
-  if (!mapDef.custom && lap.clean) {
+  if (lap.clean) {
     const n=claimMission('clean_finish_'+mapDef.id,150); if(n){reward+=n;rewardParts.push('무충돌 완주 최초 달성 +'+n);}
   }
-  if (!mapDef.custom && lap.secretDrift) {
+  if (lap.secretDrift) {
     const n=claimMission('secret_360_drift',500); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 360도 드리프트 +'+n);}
   }
-  if (!mapDef.custom && lap.secretReverse) {
+  if (lap.secretReverse) {
     const n=claimMission('secret_reverse_120',350); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 역주행 120m +'+n);}
   }
-  me.coins += reward; persistLocal(); pushMe(); renderWallet(); renderGarage();
+  me.coins += reward;
   $('rTitle').textContent = '레이스 완료 · ' + (mapDef.name || '');
   $('rTotal').textContent = fmt(tot);
   $('rBadge').textContent = lap.pb ? '개인 최고 기록 갱신!' : '';
@@ -742,6 +739,8 @@ function finishRace() {
   const ol = $('rLaps'); ol.textContent = '';
   lap.times.forEach((t,i) => { const li = document.createElement('li'); if (t === bestRun) li.className = 'best'; const a = document.createElement('span'), b = document.createElement('span'); a.textContent = 'LAP ' + (i+1); b.textContent = fmt(t); li.append(a, b); ol.appendChild(li); });
   $('result').style.display = 'flex'; $('touch').style.display = 'none';
+  renderWallet(); renderGarage(); persistLocal();
+  try { pushMe(); } catch (e) { console.error('보상 저장 실패:', e); }
 }
 function restartRace() { $('result').style.display = 'none'; flushDist(); resetCar(); mode = 'countdown'; cdT = 3.2; if (matchMedia('(pointer:coarse)').matches) $('touch').style.display = 'block'; }
 function toMenu() {
@@ -750,7 +749,7 @@ function toMenu() {
   renderMaps(); renderLB(); renderNotice();
 }
 function flushDist(save=true) {
-  if (!mapDef || mapDef.custom || unsavedDist < 5) { return; }
+  if (!mapDef || unsavedDist < 5) { return; }
   me.dist[mapDef.id] = (me.dist[mapDef.id]||0) + unsavedDist * M_PER_PX; unsavedDist = 0;
   if (save) pushMe();
 }
@@ -773,17 +772,6 @@ document.querySelectorAll('#touch .tb').forEach(b => {
 });
 $('start').onclick = startRace;
 $('menuBtn').onclick = toMenu; $('rMenu').onclick = toMenu; $('rAgain').onclick = restartRace;
-$('upload').onclick = () => $('file').click();
-$('file').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return; showErr('');
-  try {
-    const url = URL.createObjectURL(f), im = await loadImage(url);
-    const probe = buildMap(im, im.naturalWidth, im.naturalHeight); // 유효성 검사
-    customDef = { id:'custom', name:'내 맵: ' + f.name.slice(0,18), custom:true, src:url }; selectedId = 'custom';
-    cache.custom = probe; renderMaps(); renderLB(); toast('맵을 읽었어요. 레이스 시작을 눌러 주세요.');
-  } catch (err) { showErr(err.message); }
-  e.target.value = '';
-};
 
 /* ===================== 물리 =====================*/
 const MAXV = 480, ACC = 520, BRK = 900;
