@@ -727,14 +727,16 @@ onAuthStateChanged(firebaseAuth, async user => {
       for (const [mapId, value] of Object.entries(saved.laps || {})) {
         if (typeof value === 'number') me.laps[mapId] = Math.max(me.laps[mapId] || 0, value);
       }
-      me.nick = (saved.nickname || nickInput.value.trim() || user.displayName || me.nick || '레이서').slice(0, 12);\n      me.vehicleColor = typeof saved.vehicleColor === 'string' ? saved.vehicleColor : (me.vehicleColor || '#2563eb');
+      me.nick = (saved.nickname || nickInput.value.trim() || user.displayName || me.nick || '레이서').slice(0, 12);
+      me.vehicleColor = typeof saved.vehicleColor === 'string' ? saved.vehicleColor : (me.vehicleColor || '#2563eb');
       nickInput.value = me.nick;
       persistLocal();
       const profile = {
         uid: user.uid,
         nickname: me.nick,
         displayName: user.displayName || '',
-        photoURL: user.photoURL || '',\n        vehicleColor: me.vehicleColor,
+        photoURL: user.photoURL || '',
+        vehicleColor: me.vehicleColor,
         email: user.email || '',
         bests: me.bests,
         dist: me.dist,
