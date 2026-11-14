@@ -533,6 +533,16 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel) {
     g.fillStyle='#090f1c'; g.beginPath(); g.roundRect(x,y+3,16,10,4); g.fill();
     g.fillStyle=wheelColor; g.beginPath(); g.roundRect(x+2,y+3,12,7,3); g.fill();
     g.fillStyle='rgba(255,255,255,.42)'; g.fillRect(x+7,y+4,2,5);
+    // 알로이 휠: 림 링, 5스포크, 중앙 허브와 브레이크 캘리퍼
+    g.strokeStyle='rgba(226,232,240,.82)'; g.lineWidth=1;
+    g.beginPath(); g.arc(x+8,y+8.5,3.1,0,Math.PI*2); g.stroke();
+    for(let spoke=0;spoke<5;spoke++){
+      const a=spoke*Math.PI*2/5;
+      g.beginPath(); g.moveTo(x+8+Math.cos(a)*1.1,y+8.5+Math.sin(a)*1.1);
+      g.lineTo(x+8+Math.cos(a)*3.1,y+8.5+Math.sin(a)*3.1); g.stroke();
+    }
+    g.fillStyle='#cbd5e1'; g.beginPath(); g.arc(x+8,y+8.5,1.1,0,Math.PI*2); g.fill();
+    g.fillStyle='#dc2626'; g.fillRect(x+3,y+5,1.5,4);
   }));
   g.save(); g.translate(0,5); bodyPath(); g.fillStyle='#101827'; g.fill(); g.restore();
   const paint=g.createLinearGradient(0,-W/2,0,W/2);
@@ -598,6 +608,63 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel) {
   if(isHuracan){
     g.fillStyle='#111827'; g.fillRect(-43,-11,4,22); g.fillRect(-39,-3,5,6);
   }
+
+  // 사이드 미러와 미러 하우징
+  g.fillStyle='#111827';
+  [-1,1].forEach(side=>{
+    g.beginPath(); g.moveTo(5,side*14); g.lineTo(9,side*18);
+    g.lineTo(15,side*17); g.lineTo(12,side*13); g.closePath(); g.fill();
+    g.fillStyle='rgba(190,220,245,.8)'; g.fillRect(10,side*15.2,3,1.2);
+    g.fillStyle='#111827';
+  });
+
+  // 도어 경계, 손잡이와 사이드 캐릭터 라인
+  g.strokeStyle='rgba(8,15,28,.58)'; g.lineWidth=.9;
+  g.beginPath();
+  g.moveTo(-8,-15); g.lineTo(-5,-11); g.lineTo(-4,11); g.lineTo(-8,15);
+  g.moveTo(18,-13); g.lineTo(19,-8); g.lineTo(19,8); g.lineTo(18,13);
+  g.stroke();
+  g.fillStyle='rgba(226,232,240,.72)';
+  g.fillRect(1,-14,5,1.2); g.fillRect(1,12.8,5,1.2);
+  g.strokeStyle='rgba(255,255,255,.24)'; g.lineWidth=1.1;
+  g.beginPath(); g.moveTo(-28,-17); g.lineTo(25,-15);
+  g.moveTo(-28,17); g.lineTo(25,15); g.stroke();
+
+  // 차종별 펜더 통풍구와 사이드 스커트
+  if(isHuracan || isGT3){
+    g.fillStyle='rgba(8,15,28,.78)';
+    g.beginPath(); g.moveTo(-5,-18); g.lineTo(8,-17); g.lineTo(4,-15); g.lineTo(-7,-16); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(-5,18); g.lineTo(8,17); g.lineTo(4,15); g.lineTo(-7,16); g.closePath(); g.fill();
+  } else if(isStinger){
+    g.strokeStyle='rgba(15,23,42,.72)'; g.lineWidth=1.5;
+    g.beginPath(); g.moveTo(-4,-17); g.lineTo(8,-16); g.moveTo(-4,17); g.lineTo(8,16); g.stroke();
+  }
+  g.fillStyle='rgba(15,23,42,.9)';
+  g.fillRect(-19,-20,48,2); g.fillRect(-19,18,48,2);
+
+  // 프런트 스플리터와 리어 디퓨저 핀
+  g.fillStyle='#0b1220';
+  g.fillRect(42,-10,3,20);
+  g.fillRect(-47,-11,3,22);
+  for(let fin=-1;fin<=1;fin++){
+    g.fillRect(-46,fin*6-1,5,1.5);
+  }
+  // 배기구: 스팅어의 듀얼 팁, GT3/우라칸의 스포츠 배기
+  g.fillStyle='#64748b';
+  if(isStinger){
+    [-1,1].forEach(side=>{ g.beginPath(); g.arc(-43,side*12,2.4,0,Math.PI*2); g.fill(); });
+  } else if(isGT3 || isHuracan){
+    [-1,1].forEach(side=>{ g.beginPath(); g.arc(-43,side*7,2,0,Math.PI*2); g.fill(); });
+  }
+
+  // 유리 반사 하이라이트와 앞유리 와이퍼
+  g.strokeStyle='rgba(219,239,255,.42)'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(-14,-10); g.lineTo(-3,-12);
+  g.moveTo(-14,10); g.lineTo(-3,12); g.stroke();
+  g.strokeStyle='rgba(8,15,28,.7)'; g.lineWidth=.8;
+  g.beginPath(); g.moveTo(8,-8); g.lineTo(14,-5);
+  g.moveTo(8,8); g.lineTo(14,5); g.stroke();
+
   g.restore();
 }
 function lightenVehicleColor(hex,amount){
