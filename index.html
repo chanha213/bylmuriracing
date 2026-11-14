@@ -1476,7 +1476,9 @@ friendsPanel.addEventListener('click',async event=>{
   }catch(e){console.error(e);friendStatus('처리 실패. Firestore 보안 규칙을 확인해 주세요.');}
 });
 
+let authSessionToken = 0;
 onAuthStateChanged(firebaseAuth, async user => {
+  const sessionToken = ++authSessionToken;
   if (user) {
     // Keep each Google account's local racing data in a separate browser storage slot.
     switchLocalAccount(user.uid);
@@ -1488,8 +1490,10 @@ onAuthStateChanged(firebaseAuth, async user => {
     try {
       const profileRef = doc(firestore, 'users', user.uid);
       const profileSnap = await getDoc(profileRef);
+      // A previous account's slower network response must never mutate the newly selected account.
+      if (sessionToken !== authSessionToken || firebaseAuth.currentUser?.uid !== user.uid) return;
       const saved = profileSnap.exists() ? profileSnap.data() : {};
-      // Merge cloud records with this device: keep the faster best lap and larger totals.
+      // Only merge the signed-in account's own cloud profile with its own local storage slot.
       for (const [mapId, ms] of Object.entries(saved.bests || {})) {
         if (typeof ms === 'number' && (me.bests[mapId] == null || ms < me.bests[mapId])) me.bests[mapId] = ms;
       }
@@ -1530,6 +1534,7 @@ onAuthStateChanged(firebaseAuth, async user => {
       };
       if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
       await reserveNicknameAndSaveProfile(profileRef, profile, saved.nickname || me.nick);
+      if (sessionToken !== authSessionToken || firebaseAuth.currentUser?.uid !== user.uid) return;
       renderLB(); renderMaps(); renderGarage(); renderWallet();
       accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 계정과 레이싱 기록 동기화 완료!';
     } catch (error) {
