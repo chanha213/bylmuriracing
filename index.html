@@ -43,6 +43,20 @@
   #err { color:#b91c1c; font-size:13px; margin-top:8px; display:none; }
   kbd { background:#f1f5f9; border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 5px; font-size:11px; }
 
+  #garagePanel { position:absolute; inset:0; z-index:10; display:none; align-items:center; justify-content:center; padding:14px; background:rgba(15,23,42,.72); overflow:auto; }
+  .garage-card { width:min(620px,100%); max-height:100%; overflow:auto; background:#fff; border-radius:16px; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,.28); }
+  .garage-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .garage-head h2 { margin:0; font-size:20px; }
+  .garage-preview { background:linear-gradient(135deg,#e2e8f0,#f8fafc); border:1px solid var(--line); border-radius:12px; padding:8px; margin-bottom:16px; }
+  #garagePreview { display:block; width:100%; height:150px; }
+  .garage-section { margin:14px 0; }
+  .garage-section h3 { font-size:12px; color:var(--mute); margin:0 0 8px; letter-spacing:.04em; }
+  .garage-options { display:flex; flex-wrap:wrap; gap:8px; }
+  .garage-option { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:9px; padding:9px 12px; font-size:13px; font-weight:600; }
+  .garage-option.selected { border-color:var(--accent); background:#eff6ff; box-shadow:0 0 0 1px var(--accent) inset; }
+  #garageColors { display:flex; gap:10px; flex-wrap:wrap; }
+  #garageColors button { width:30px; height:30px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #94a3b8; }
+  #garageColors button.selected { outline:3px solid #0f172a; outline-offset:3px; }
   #menuBtn { position:absolute; left:1.5%; top:22%; background:rgba(15,23,42,.62); color:#fff; border:0; border-radius:999px; padding:7px 13px; font-size:13px; font-weight:600; z-index:4; }
   #result { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(15,23,42,.5); z-index:6; padding:12px; }
   .rcard { background:#fff; border-radius:14px; padding:20px 26px; width:min(380px,100%); text-align:center; max-height:100%; overflow:auto; }
@@ -93,15 +107,11 @@
       </div>
       <label for="nick">닉네임</label>
       <input type="text" id="nick" maxlength="12" autocomplete="off">
-      <label>내 차량 색상</label>
-      <div id="carColors" style="display:flex;gap:9px;align-items:center;margin:0 0 12px;flex-wrap:wrap">
-        <button type="button" data-car-color="#2563eb" aria-label="레이싱 블루" title="레이싱 블루" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#2563eb"></button>
-        <button type="button" data-car-color="#e11d48" aria-label="레이싱 레드" title="레이싱 레드" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#e11d48"></button>
-        <button type="button" data-car-color="#16a34a" aria-label="그린" title="그린" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#16a34a"></button>
-        <button type="button" data-car-color="#f59e0b" aria-label="골드" title="골드" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#f59e0b"></button>
-        <button type="button" data-car-color="#7c3aed" aria-label="퍼플" title="퍼플" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#7c3aed"></button>
-        <button type="button" data-car-color="#111827" aria-label="블랙" title="블랙" style="width:27px;height:27px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #94a3b8;background:#111827"></button>
+      <div style="display:flex;align-items:center;gap:12px;margin:8px 0 12px">
+        <canvas id="menuCarPreview" width="112" height="64" style="width:112px;height:64px;background:#f1f5f9;border-radius:9px"></canvas>
+        <div style="flex:1;min-width:0"><div id="menuCarName" style="font-size:14px;font-weight:800">스트리트 쿠페</div><div style="font-size:12px;color:#64748b">나만의 레이싱 머신</div></div>
       </div>
+      <button class="btn ghost" id="openGarage" type="button" style="margin-top:0">차고 열기 · 차량 꾸미기</button>
       <button class="btn" id="start">레이스 시작</button>
       <button class="btn ghost" id="upload">내 맵 이미지로 연습하기</button>
       <input type="file" id="file" accept="image/*" hidden>
@@ -115,6 +125,36 @@
       <div class="credit" style="font-size:12px;color:#64748b;margin-top:2px;line-height:1.5">지도: NAVER 지도(국토지리정보원) 화면을 보고 직접 그린 일러스트예요.</div>
     </div>
   </div></div>
+  <div id="garagePanel" role="dialog" aria-modal="true" aria-label="차고">
+    <div class="garage-card">
+      <div class="garage-head"><h2>내 차고</h2><button class="tiny" id="closeGarage" type="button">닫기 ✕</button></div>
+      <div class="garage-preview"><canvas id="garagePreview" width="560" height="150"></canvas></div>
+      <div class="garage-section"><h3>차량 모델</h3><div class="garage-options" id="modelOptions">
+        <button class="garage-option" data-model="street" type="button">스트리트 쿠페</button>
+        <button class="garage-option" data-model="rally" type="button">랠리 해치백</button>
+        <button class="garage-option" data-model="super" type="button">슈퍼카</button>
+      </div></div>
+      <div class="garage-section"><h3>차체 색상</h3><div id="garageColors">
+        <button type="button" data-car-color="#2563eb" aria-label="레이싱 블루" title="레이싱 블루" style="background:#2563eb"></button>
+        <button type="button" data-car-color="#e11d48" aria-label="레이싱 레드" title="레이싱 레드" style="background:#e11d48"></button>
+        <button type="button" data-car-color="#16a34a" aria-label="그린" title="그린" style="background:#16a34a"></button>
+        <button type="button" data-car-color="#f59e0b" aria-label="골드" title="골드" style="background:#f59e0b"></button>
+        <button type="button" data-car-color="#7c3aed" aria-label="퍼플" title="퍼플" style="background:#7c3aed"></button>
+        <button type="button" data-car-color="#111827" aria-label="블랙" title="블랙" style="background:#111827"></button>
+      </div></div>
+      <div class="garage-section"><h3>휠 스타일</h3><div class="garage-options" id="wheelOptions">
+        <button class="garage-option" data-wheel="street" type="button">기본 휠</button>
+        <button class="garage-option" data-wheel="sport" type="button">스포츠 휠</button>
+        <button class="garage-option" data-wheel="white" type="button">화이트 휠</button>
+      </div></div>
+      <div class="garage-section"><h3>리어 스포일러</h3><div class="garage-options" id="spoilerOptions">
+        <button class="garage-option" data-spoiler="off" type="button">장착 안 함</button>
+        <button class="garage-option" data-spoiler="on" type="button">스포일러 장착</button>
+      </div></div>
+      <button class="btn" id="saveGarage" type="button">차량 저장</button>
+      <div id="garageStatus" style="font-size:12px;color:#64748b;margin-top:8px;text-align:center">선택한 외형은 이 기기와 로그인 계정에 저장돼요.</div>
+    </div>
+  </div>
 </div></div>
 
 <script type="module">
@@ -284,7 +324,7 @@ let toastTimer = 0;
 
 /* ===================== 저장/공유 =====================*/
 const LS = 'droneRacer.v1';
-let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb' };
+let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'street', wheelStyle:'street', spoiler:false };
 try { const s = JSON.parse(localStorage.getItem(LS)||'null'); if (s) me = Object.assign(me, s); } catch(e){}
 if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
 const persistLocal = () => { try { localStorage.setItem(LS, JSON.stringify(me)); } catch(e){} };
@@ -332,6 +372,10 @@ function pushMe() {
       bests: me.bests,
       dist: me.dist,
       laps: me.laps,
+      vehicleColor: me.vehicleColor,
+      vehicleModel: me.vehicleModel,
+      wheelStyle: me.wheelStyle,
+      spoiler: !!me.spoiler,
       recordsUpdatedAt: serverTimestamp()
     }, { merge: true }).catch(error => {
       console.error('Firestore race data save error:', error);
@@ -380,22 +424,61 @@ const $ = id => document.getElementById(id);
 const nickEl = $('nick'), mapsEl = $('maps');
 nickEl.value = me.nick;
 nickEl.addEventListener('change', () => { me.nick = (nickEl.value.trim() || me.nick).slice(0,12); nickEl.value = me.nick; pushMe(); renderLB(); });
-const carColorsEl = $('carColors');
-function renderCarColors() {
-  carColorsEl.querySelectorAll('[data-car-color]').forEach(button => {
-    const selected = button.dataset.carColor === me.vehicleColor;
-    button.style.outline = selected ? '3px solid #0f172a' : 'none';
-    button.style.outlineOffset = '2px';
-    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-  });
+const garagePanel = $('garagePanel');
+const vehicleNames = { street:'스트리트 쿠페', rally:'랠리 해치백', super:'슈퍼카' };
+function paintVehicle(g, scale=1) {
+  g.save(); g.scale(scale, scale);
+  const L = 92, W = 42;
+  g.fillStyle = 'rgba(15,23,42,.18)'; g.beginPath(); g.roundRect(-L/2+3,-W/2+4,L,W,10); g.fill();
+  const wheelColor = me.wheelStyle === 'white' ? '#f8fafc' : (me.wheelStyle === 'sport' ? '#111827' : '#334155');
+  const wheelStroke = me.wheelStyle === 'white' ? '#64748b' : '#0f172a';
+  g.fillStyle = wheelColor; g.strokeStyle = wheelStroke; g.lineWidth = 2;
+  [[-25,-W/2-3], [20,-W/2-3], [-25,W/2-5], [20,W/2-5]].forEach(([x,y]) => { g.beginPath(); g.roundRect(x,y,15,8,3); g.fill(); g.stroke(); });
+  g.fillStyle = me.vehicleColor || '#2563eb'; g.strokeStyle = 'rgba(15,23,42,.35)'; g.lineWidth = 1.5;
+  g.beginPath();
+  if (me.vehicleModel === 'rally') {
+    g.moveTo(-L/2+5,-W/2+4); g.lineTo(-L/2+15,-W/2); g.lineTo(L/2-12,-W/2); g.lineTo(L/2-3,-W/2+8); g.lineTo(L/2-3,W/2-8); g.lineTo(L/2-12,W/2); g.lineTo(-L/2+15,W/2); g.lineTo(-L/2+5,W/2-4);
+  } else if (me.vehicleModel === 'super') {
+    g.moveTo(-L/2+2,-W/2+5); g.lineTo(-L/2+18,-W/2+1); g.lineTo(L/2-13,-W/2+3); g.lineTo(L/2,W/2-3); g.lineTo(-L/2+18,W/2-1); g.lineTo(-L/2+2,W/2-5);
+  } else {
+    g.moveTo(-L/2+4,-W/2+7); g.lineTo(-L/2+16,-W/2+2); g.lineTo(L/2-14,-W/2+2); g.lineTo(L/2-3,-W/2+7); g.lineTo(L/2-3,W/2-7); g.lineTo(L/2-14,W/2-2); g.lineTo(-L/2+16,W/2-2); g.lineTo(-L/2+4,W/2-7);
+  }
+  g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = '#0f172a'; g.beginPath(); g.roundRect(-13,-W/2+5,28,W-10,6); g.fill();
+  g.fillStyle = 'rgba(191,219,254,.88)'; g.beginPath(); g.roundRect(-10,-W/2+7,22,W-14,4); g.fill();
+  g.fillStyle = '#fef3c7'; g.fillRect(L/2-6,-W/2+8,4,7); g.fillRect(L/2-6,W/2-15,4,7);
+  if (me.spoiler) { g.fillStyle = '#111827'; g.fillRect(-L/2+5,-W/2-6,5,W+12); g.fillRect(-L/2+1,-W/2-8,13,4); }
+  g.restore();
 }
-carColorsEl.addEventListener('click', event => {
-  const button = event.target.closest('[data-car-color]');
-  if (!button) return;
-  me.vehicleColor = button.dataset.carColor;
-  persistLocal(); renderCarColors(); pushMe();
-});
-renderCarColors();
+function drawVehiclePreview(canvas, compact=false) {
+  if (!canvas) return;
+  const g = canvas.getContext('2d'), w=canvas.width, h=canvas.height;
+  g.clearRect(0,0,w,h);
+  g.fillStyle = compact ? '#f1f5f9' : '#e2e8f0'; g.fillRect(0,0,w,h);
+  g.save(); g.translate(w/2,h/2); g.scale(compact ? .72 : 1.18, compact ? .72 : 1.18); paintVehicle(g,1); g.restore();
+}
+function renderGarage() {
+  document.querySelectorAll('[data-model]').forEach(b => b.classList.toggle('selected', b.dataset.model === me.vehicleModel));
+  document.querySelectorAll('[data-wheel]').forEach(b => b.classList.toggle('selected', b.dataset.wheel === me.wheelStyle));
+  document.querySelectorAll('[data-spoiler]').forEach(b => b.classList.toggle('selected', (b.dataset.spoiler === 'on') === !!me.spoiler));
+  document.querySelectorAll('[data-car-color]').forEach(b => b.classList.toggle('selected', b.dataset.carColor === me.vehicleColor));
+  $('menuCarName').textContent = vehicleNames[me.vehicleModel] || vehicleNames.street;
+  drawVehiclePreview($('garagePreview'));
+  drawVehiclePreview($('menuCarPreview'), true);
+}
+function saveVehicleSettings() {
+  persistLocal(); pushMe(); renderGarage();
+  $('garageStatus').textContent = firebaseAuth.currentUser ? '차량 외형을 저장했어요. 계정과 동기화됩니다.' : '차량 외형을 이 기기에 저장했어요. 로그인하면 다른 기기와 동기화할 수 있어요.';
+}
+$('openGarage').addEventListener('click', () => { renderGarage(); garagePanel.style.display='flex'; });
+$('closeGarage').addEventListener('click', () => { garagePanel.style.display='none'; });
+garagePanel.addEventListener('click', event => { if (event.target === garagePanel) garagePanel.style.display='none'; });
+$('modelOptions').addEventListener('click', event => { const b=event.target.closest('[data-model]'); if(!b)return; me.vehicleModel=b.dataset.model; renderGarage(); });
+$('wheelOptions').addEventListener('click', event => { const b=event.target.closest('[data-wheel]'); if(!b)return; me.wheelStyle=b.dataset.wheel; renderGarage(); });
+$('spoilerOptions').addEventListener('click', event => { const b=event.target.closest('[data-spoiler]'); if(!b)return; me.spoiler=b.dataset.spoiler==='on'; renderGarage(); });
+$('garageColors').addEventListener('click', event => { const b=event.target.closest('[data-car-color]'); if(!b)return; me.vehicleColor=b.dataset.carColor; renderGarage(); });
+$('saveGarage').addEventListener('click', () => { saveVehicleSettings(); garagePanel.style.display='none'; toast('내 차량을 저장했어요!'); });
+renderGarage();
 function fmt(ms) { if (ms == null) return '--:--.---'; const m = Math.floor(ms/60000), s = Math.floor(ms/1000)%60, r = Math.floor(ms)%1000; return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(r).padStart(3,'0')}`; }
 const km = px => (px*M_PER_PX/1000);
 function totalDist() { return Object.values(me.dist).reduce((a,b)=>a+b,0); }
@@ -607,11 +690,8 @@ function onLap(ms) {
 /* ===================== 렌더 =====================*/
 function drawCar() {
   ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.a);
-  ctx.fillStyle = 'rgba(15,23,42,.22)'; ctx.beginPath(); ctx.roundRect(-CAR_L/2+2, -CAR_W/2+3, CAR_L, CAR_W, 5); ctx.fill();
   if (boosting) { const f = 14 + Math.random()*10; ctx.fillStyle = '#fb923c'; ctx.beginPath(); ctx.moveTo(-CAR_L/2, -5); ctx.lineTo(-CAR_L/2 - f, 0); ctx.lineTo(-CAR_L/2, 5); ctx.fill(); ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.moveTo(-CAR_L/2, -2.5); ctx.lineTo(-CAR_L/2 - f*0.55, 0); ctx.lineTo(-CAR_L/2, 2.5); ctx.fill(); }
-  ctx.fillStyle = me.vehicleColor || '#2563eb'; ctx.beginPath(); ctx.roundRect(-CAR_L/2, -CAR_W/2, CAR_L, CAR_W, 5); ctx.fill();
-  ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.roundRect(-4, -CAR_W/2+3, 13, CAR_W-6, 3); ctx.fill();
-  ctx.fillStyle = '#fde68a'; ctx.fillRect(CAR_L/2-3, -CAR_W/2+2, 3, 4); ctx.fillRect(CAR_L/2-3, CAR_W/2-6, 3, 4);
+  ctx.save(); ctx.scale(CAR_L/92, CAR_W/42); paintVehicle(ctx,1); ctx.restore();
   if (keys.brake && car.vf > 5) { ctx.fillStyle = '#ef4444'; ctx.fillRect(-CAR_L/2, -CAR_W/2+2, 3, 4); ctx.fillRect(-CAR_L/2, CAR_W/2-6, 3, 4); }
   ctx.restore();
 }
@@ -729,6 +809,9 @@ onAuthStateChanged(firebaseAuth, async user => {
       }
       me.nick = (saved.nickname || nickInput.value.trim() || user.displayName || me.nick || '레이서').slice(0, 12);
       me.vehicleColor = typeof saved.vehicleColor === 'string' ? saved.vehicleColor : (me.vehicleColor || '#2563eb');
+      me.vehicleModel = ['street','rally','super'].includes(saved.vehicleModel) ? saved.vehicleModel : (me.vehicleModel || 'street');
+      me.wheelStyle = ['street','sport','white'].includes(saved.wheelStyle) ? saved.wheelStyle : (me.wheelStyle || 'street');
+      me.spoiler = typeof saved.spoiler === 'boolean' ? saved.spoiler : !!me.spoiler;
       nickInput.value = me.nick;
       persistLocal();
       const profile = {
@@ -737,6 +820,9 @@ onAuthStateChanged(firebaseAuth, async user => {
         displayName: user.displayName || '',
         photoURL: user.photoURL || '',
         vehicleColor: me.vehicleColor,
+        vehicleModel: me.vehicleModel,
+        wheelStyle: me.wheelStyle,
+        spoiler: !!me.spoiler,
         email: user.email || '',
         bests: me.bests,
         dist: me.dist,
@@ -745,7 +831,7 @@ onAuthStateChanged(firebaseAuth, async user => {
       };
       if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
       await setDoc(profileRef, profile, { merge: true });
-      renderLB(); renderMaps();
+      renderLB(); renderMaps(); renderGarage();
       accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 계정과 레이싱 기록 동기화 완료!';
     } catch (error) {
       console.error('Firestore profile save error:', error);
