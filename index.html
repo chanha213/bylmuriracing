@@ -373,7 +373,7 @@ let camMode = 'follow';   // follow | fixed
 const car = { x:0,y:0,a:0,vx:0,vy:0,steer:0,vf:0,vl:0 };
 let trail = null, tg = null;
 let raceT = 0, cdT = 0;
-let lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best:null, dist:0, maxFar:0, visited:null, prevS:0 };
+let lap = { times:[], ghostLaps:[], pb:false, started:false, t0:0, n:0, last:null, best:null, dist:0, maxFar:0, visited:null, prevS:0 };
 let sessionDist = 0, unsavedDist = 0;
 let trackCoins = [], trackFuel = [], raceCoins = 0;
 const LAPS = 3;   // 한 번의 레이스 = 3랩
@@ -875,50 +875,58 @@ async function startRace() {
 }
 async function loadGhostForMap(mapId) {
   ghostOpponent = null;
-  const own = me.ghosts && me.ghosts[mapId] ? me.ghosts[mapId] : null;
-  let candidates = [];
   const user = firebaseAuth.currentUser;
-  if (user) {
-    try {
-      const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId),limit(20)));
-      snap.forEach(d => candidates.push(d.data()));
-    } catch (e) { console.warn('고스트 기록을 불러오지 못했어요. Firestore 규칙을 확인해 주세요.',e); }
+  if (!user) { toast('고스트 레이싱은 Google 로그인 후 이용할 수 있어요.',1800); return; }
+  try {
+    const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId),limit(50)));
+    const rivals = [];
+    snap.forEach(d => {
+      const g=d.data();
+      if (g.uid !== user.uid && Array.isArray(g.laps) && g.laps.length === LAPS &&
+          g.laps.every(a=>Array.isArray(a) && a.length>=2) &&
+          Array.isArray(g.lapTimes) && g.lapTimes.length===LAPS &&
+          Number.isFinite(g.totalMs)) rivals.push(g);
+    });
+    rivals.sort((a,b)=>a.totalMs-b.totalMs);
+    ghostOpponent = rivals[0] || null;
+    if (ghostOpponent) toast('👻 '+(ghostOpponent.nickname||'상대 레이서')+' · 3랩 최고 기록 '+fmt(ghostOpponent.totalMs),2600);
+    else toast('이 코스에 다른 계정의 3랩 고스트 기록이 아직 없어요.',2400);
+  } catch (e) {
+    console.warn('고스트 기록을 불러오지 못했어요. Firestore 규칙을 확인해 주세요.',e);
+    toast('온라인 고스트를 불러오지 못했어요.',2000);
   }
-  candidates = candidates.filter(g => Array.isArray(g.samples) && g.samples.length >= 2 && Number.isFinite(g.bestMs));
-  const rivals = candidates.filter(g => !user || g.uid !== user.uid).sort((a,b)=>a.bestMs-b.bestMs);
-  if (rivals.length) ghostOpponent = rivals[0];
-  else if (own && Array.isArray(own.samples) && own.samples.length >= 2) ghostOpponent = own;
-  else if (candidates.length) ghostOpponent = candidates.sort((a,b)=>a.bestMs-b.bestMs)[0];
-  if (ghostOpponent) toast('👻 '+(ghostOpponent.nickname||'레이서')+' 고스트와 대결 · '+fmt(ghostOpponent.bestMs),2200);
 }
-function saveGhostRecord(mapId, ms, samples) {
-  if (!Array.isArray(samples) || samples.length < 2) return;
-  const record = {
-    uid: firebaseAuth.currentUser ? firebaseAuth.currentUser.uid : 'local',
-    nickname: me.nick || '레이서',
-    mapId, bestMs: Math.round(ms),
-    vehicleModel: me.vehicleModel, vehicleColor: me.vehicleColor,
-    samples: samples.map(p=>({t:Math.round(p.t),x:Math.round(p.x*10)/10,y:Math.round(p.y*10)/10,a:Math.round(p.a*10000)/10000}))
-  };
-  const old = me.ghosts[mapId];
-  if (!old || record.bestMs < old.bestMs) {
-    me.ghosts[mapId] = record;
-    persistLocal();
-  }
+async function saveGhostRecord(mapId, totalMs, lapSamples, lapTimes) {
+  if (!Array.isArray(lapSamples) || lapSamples.length!==LAPS ||
+      !lapSamples.every(a=>Array.isArray(a)&&a.length>=2) ||
+      !Array.isArray(lapTimes) || lapTimes.length!==LAPS) return;
   const user = firebaseAuth.currentUser;
-  if (user) {
-    setDoc(doc(firestore,'ghosts',mapId+'_'+user.uid),record,{merge:true})
-      .then(()=>{})
-      .catch(e=>{console.error('고스트 업로드 실패:',e);toast('고스트 온라인 저장 실패 · Firestore 규칙을 확인해 주세요',2400);});
+  if (!user) return;
+  const ref=doc(firestore,'ghosts',mapId+'_'+user.uid);
+  try {
+    const snap=await getDoc(ref);
+    const old=snap.exists()?snap.data():null;
+    if (old && Number.isFinite(old.totalMs) && old.totalMs<=totalMs) return;
+    const cleanLaps=lapSamples.map(samples=>samples.map(p=>({
+      t:Math.round(p.t),x:Math.round(p.x*10)/10,y:Math.round(p.y*10)/10,a:Math.round(p.a*10000)/10000
+    })));
+    const record={
+      uid:user.uid,nickname:me.nick||'레이서',mapId,totalMs:Math.round(totalMs),
+      lapTimes:lapTimes.map(Math.round),laps:cleanLaps,
+      vehicleModel:me.vehicleModel,vehicleColor:me.vehicleColor,
+      updatedAt:serverTimestamp()
+    };
+    await setDoc(ref,record,{merge:true});
+    me.ghosts[mapId]=record;persistLocal();
+    toast('3랩 고스트 최고 기록을 저장했어요.',1800);
+  } catch(e) {
+    console.error('3랩 고스트 업로드 실패:',e);
+    toast('고스트 저장 실패 · Firestore 규칙을 확인해 주세요',2400);
   }
 }
 function ghostPositionAt(elapsedMs) {
-  const samples=ghostOpponent && ghostOpponent.samples;
+  const samples=ghostOpponent && ghostOpponent.laps && ghostOpponent.laps[lap.n];
   if (!samples || samples.length < 2) return null;
-  // A ghost is one best-lap replay; restart its timeline at each subsequent lap.
-  const duration = samples[samples.length-1].t;
-  if (!(duration > 0)) return samples[0];
-  elapsedMs = ((Math.max(0, elapsedMs) % duration) + duration) % duration;
   if (elapsedMs <= samples[0].t) return samples[0];
   for(let i=1;i<samples.length;i++){
     const b=samples[i],a=samples[i-1];
@@ -931,7 +939,7 @@ function ghostPositionAt(elapsedMs) {
   return samples[samples.length-1];
 }
 function drawGhostCar() {
-  if (!ghostOpponent || mode!=='race' || !lap.started) return;
+  if (!ghostOpponent || mode!=='race' || !lap.started || lap.n>=LAPS) return;
   const p=ghostPositionAt((raceT-lap.t0)*1000);
   if(!p)return;
   ctx.save();ctx.globalAlpha=.42;ctx.translate(p.x,p.y);ctx.rotate(p.a);
@@ -1010,7 +1018,7 @@ function resetCar() {
   car.x = map.start.x; car.y = map.start.y; car.a = map.start.a; car.vx = car.vy = car.vf = car.vl = car.steer = 0;
   reverseWarningActive = false;
   const warningEl = document.getElementById("reverseWarning"); if (warningEl) warningEl.classList.remove("on");
-  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, driftDirection:0, secretDrift:false, secretReverse:false, wrongWay:false, rewardGranted:false };
+  lap = { times:[], ghostLaps:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, driftDirection:0, secretDrift:false, secretReverse:false, wrongWay:false, rewardGranted:false };
   spawnTrackCoins();
   lap.ghostSamples=[]; lap.ghostSampleAt=100;
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
@@ -1026,6 +1034,10 @@ function claimMission(key, amount) {
 function finishRace() {
   if (!lap || lap.rewardGranted) return;
   lap.rewardGranted = true;
+  if (!mapDef.custom && lap.n===LAPS && lap.times.length===LAPS && lap.ghostLaps && lap.ghostLaps.length===LAPS) {
+    const totalMs=lap.times.reduce((a,b)=>a+b,0);
+    saveGhostRecord(mapDef.id,totalMs,lap.ghostLaps,lap.times);
+  }
   mode = 'finish'; flushDist(false); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
   const tot = lap.times.reduce((a,b)=>a+b,0), bestRun = Math.min(...lap.times);
   let reward = 30 + raceCoins;
@@ -1230,8 +1242,11 @@ function updateLap(dt, moved, prevX, prevY) {
       if (okCp) {
         const ms = (tNow - lap.t0) * 1000;
         if (lap.ghostSamples && lap.ghostSamples.length) { while(lap.ghostSamples.length>1 && lap.ghostSamples[lap.ghostSamples.length-1].t>=ms) lap.ghostSamples.pop(); lap.ghostSamples.push({t:ms,x:car.x,y:car.y,a:car.a}); }
+        lap.ghostLaps = lap.ghostLaps || [];
+        lap.ghostLaps.push((lap.ghostSamples||[]).map(p=>({...p})));
         lap.n++; lap.last = ms; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set();
         lap.times.push(ms); onLap(ms, lap.n < LAPS);
+        lap.t0 = tNow;
         lap.ghostSamples=[{t:0,x:car.x,y:car.y,a:car.a}];lap.ghostSampleAt=100;
         if (lap.n >= LAPS) finishRace();
       } else toast(map.cps.length ? '체크포인트를 지나지 않았어요' : '코스를 한 바퀴 돌아야 해요', 1600);
@@ -1243,7 +1258,7 @@ function onLap(ms, saveNow=true) {
   if (mapDef.custom) { if (lap.best == null || ms < lap.best) { lap.best = ms; lap.pb = true; toast('연습 최고 랩 ' + fmt(ms)); } else toast('랩 ' + fmt(ms)); return; }
   const id = mapDef.id; me.laps[id] = (me.laps[id]||0) + 1;
   const prevBest = me.bests[id];
-  if (prevBest == null || ms < prevBest) { me.bests[id] = Math.round(ms); lap.best = Math.round(ms); lap.pb = true; saveGhostRecord(id,ms,lap.ghostSamples||[]); toast('개인 최고 기록  ' + fmt(ms), 3000); }
+  if (prevBest == null || ms < prevBest) { me.bests[id] = Math.round(ms); lap.best = Math.round(ms); lap.pb = true; toast('개인 최고 기록  ' + fmt(ms), 3000); }
   else toast('랩 ' + fmt(ms));
   me.dist[id] = (me.dist[id]||0) + unsavedDist * M_PER_PX; unsavedDist = 0;
   if (saveNow) pushMe(); else persistLocal();
