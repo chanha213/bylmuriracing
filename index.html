@@ -345,7 +345,7 @@ let trail = null, tg = null;
 let raceT = 0, cdT = 0;
 let lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best:null, dist:0, maxFar:0, visited:null, prevS:0 };
 let sessionDist = 0, unsavedDist = 0;
-let trackCoins = [], raceCoins = 0;
+let trackCoins = [], trackFuel = [], raceCoins = 0;
 const LAPS = 3;   // 한 번의 레이스 = 3랩
 let toastTimer = 0;
 let reverseWarningActive = false;
@@ -807,16 +807,50 @@ async function startRace() {
   if (matchMedia('(pointer:coarse)').matches) $('touch').style.display = 'block';
 }
 function spawnTrackCoins() {
-  trackCoins = []; raceCoins = 0;
+  trackCoins = []; trackFuel = []; raceCoins = 0;
   if (!mapDef) return;
   const target = 8, minSpacing = 105;
-  for (let tries=0; tries<6000 && trackCoins.length<target; tries++) {
-    const ix = Math.floor(Math.random()*map.mw), iy = Math.floor(Math.random()*map.mh);
-    if (!map.mask[iy*map.mw+ix]) continue;
-    const x=(ix+.5)*map.k, y=(iy+.5)*map.k;
-    if (Math.hypot(x-map.start.x,y-map.start.y)<150) continue;
-    if (trackCoins.some(c=>Math.hypot(c.x-x,c.y-y)<minSpacing)) continue;
-    trackCoins.push({x,y,taken:false});
+  // 코인과 연료를 모두 실제 주행 가능한 도로 위에 무작위 배치
+  const placePickups = (list, count) => {
+    for (let tries=0; tries<6000 && list.length<count; tries++) {
+      const ix = Math.floor(Math.random()*map.mw), iy = Math.floor(Math.random()*map.mh);
+      if (!map.mask[iy*map.mw+ix]) continue;
+      const x=(ix+.5)*map.k, y=(iy+.5)*map.k;
+      if (Math.hypot(x-map.start.x,y-map.start.y)<150) continue;
+      if (trackCoins.concat(trackFuel).some(p=>Math.hypot(p.x-x,p.y-y)<minSpacing)) continue;
+      list.push({x,y,taken:false});
+    }
+  };
+  placePickups(trackCoins, target);
+  // 부스트 연료는 코인과 거의 같은 개수로 생성
+  placePickups(trackFuel, trackCoins.length);
+}
+function collectTrackFuel() {
+  if (!trackFuel.length || mode!=='race') return;
+  let got=0;
+  for (const f of trackFuel) {
+    if (!f.taken && Math.hypot(car.x-f.x,car.y-f.y)<29) {
+      f.taken=true; got++;
+    }
+  }
+  if (got) {
+    boostMeter=Math.min(1,boostMeter+got*0.35);
+    toast('⚡ 드리프트 연료 +' + Math.round(got*35) + '%', 1000);
+  }
+}
+function drawTrackFuel() {
+  for (const f of trackFuel) {
+    if (f.taken) continue;
+    ctx.save(); ctx.translate(f.x,f.y);
+    ctx.shadowColor='rgba(6,182,212,.55)'; ctx.shadowBlur=10;
+    ctx.fillStyle='#0e7490'; ctx.strokeStyle='#a5f3fc'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(-9,-11,18,22,5); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#cffafe'; ctx.fillRect(-5,-15,10,5);
+    ctx.fillStyle='#ecfeff'; ctx.beginPath();
+    ctx.moveTo(2,-7); ctx.lineTo(-3,1); ctx.lineTo(1,1);
+    ctx.lineTo(-2,8); ctx.lineTo(5,-1); ctx.lineTo(1,-1); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 }
 function collectTrackCoins() {
@@ -1097,6 +1131,7 @@ function render() {
   const sw = Math.min(map.W, Math.ceil(cx+R)) - sx0, sh = Math.min(map.H, Math.ceil(cy+R)) - sy0;
   if (sw > 0 && sh > 0) { const kk = map.k; ctx.drawImage(map.world, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); ctx.drawImage(trail, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); }
   drawTrackCoins();
+  drawTrackFuel();
   drawCar();
   ctx.restore();
 
@@ -1140,6 +1175,7 @@ function frame(now) {
       const px = car.x, py = car.y, moved = stepCar(dt, true);
       sessionDist += moved; unsavedDist += moved;
       collectTrackCoins();
+      collectTrackFuel();
       updateLap(dt, moved, px, py);
     }
   }
