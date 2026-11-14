@@ -382,19 +382,33 @@ let reverseWarningActive = false;
 
 /* ===================== 저장/공유 =====================*/
 const LS = 'droneRacer.v1';
-let me = { nick:'', bests:{}, dist:{}, laps:{}, ghosts:{}, vehicleColor:'#2563eb', vehicleModel:'avanteN', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['avanteN'], missionClaims:{} };
-try { const s = JSON.parse(localStorage.getItem(LS)||'null'); if (s) me = Object.assign(me, s); } catch(e){}
 const LEGACY_VEHICLE_IDS = { street:'avanteN', rally:'stinger', super:'gt3' };
 const migrateVehicleId = id => LEGACY_VEHICLE_IDS[id] || id;
-me.vehicleModel = migrateVehicleId(me.vehicleModel);
-me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
-me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['avanteN', ...me.ownedVehicles.map(migrateVehicleId)])] : ['avanteN'];
-if (['avanteN','stinger','gt3','huracan'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
-me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
-me.ghosts = me.ghosts && typeof me.ghosts === 'object' ? me.ghosts : {};
-if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
-if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
-const persistLocal = () => { try { localStorage.setItem(LS, JSON.stringify(me)); } catch(e){} };
+function createDefaultMe() {
+  return { nick:'Racer' + String(Math.floor(1000+Math.random()*9000)), bests:{}, dist:{}, laps:{}, ghosts:{}, vehicleColor:'#2563eb', vehicleModel:'avanteN', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['avanteN'], missionClaims:{} };
+}
+function normalizeMe() {
+  me.vehicleModel = migrateVehicleId(me.vehicleModel);
+  me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
+  me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['avanteN', ...me.ownedVehicles.map(migrateVehicleId)])] : ['avanteN'];
+  if (['avanteN','stinger','gt3','huracan'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
+  me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
+  me.ghosts = me.ghosts && typeof me.ghosts === 'object' ? me.ghosts : {};
+  if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
+  if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
+}
+let me = createDefaultMe();
+let activeStorageKey = LS;
+try { const saved = JSON.parse(localStorage.getItem(activeStorageKey)||'null'); if (saved) me = Object.assign(me, saved); } catch(e){}
+normalizeMe();
+const persistLocal = () => { try { localStorage.setItem(activeStorageKey, JSON.stringify(me)); } catch(e){} };
+function switchLocalAccount(accountUid) {
+  activeStorageKey = accountUid ? LS + '.user.' + accountUid : LS;
+  me = createDefaultMe();
+  try { const saved = JSON.parse(localStorage.getItem(activeStorageKey)||'null'); if (saved) me = Object.assign(me, saved); } catch(e){}
+  normalizeMe();
+  persistLocal();
+}
 
 let db=null, uid=null, players={}, seen={}, seenLoaded=false, playersLoaded=false, sharedOK=false, notices=[];
 let writeChain = Promise.resolve(), dirty=false;
@@ -1453,6 +1467,8 @@ friendsPanel.addEventListener('click',async event=>{
 
 onAuthStateChanged(firebaseAuth, async user => {
   if (user) {
+    // Keep each Google account's local racing data in a separate browser storage slot.
+    switchLocalAccount(user.uid);
     startFriendListeners(user);
     accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요. 프로필 저장 중...';
     googleLoginBtn.style.display = 'none';
@@ -1510,6 +1526,8 @@ onAuthStateChanged(firebaseAuth, async user => {
       accountStatusEl.textContent = error.code === 'nickname/taken' ? '닉네임이 중복됐어요. 닉네임을 바꾼 뒤 다시 로그인해 주세요.' : '로그인은 됐지만 프로필 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';
     }
   } else {
+    // Guest data is separate and is never merged into a signed-in account.
+    switchLocalAccount(null);
     stopFriendListeners();
     friendRequestCount=0;raceInviteCount=0;updateFriendBadge();
     document.getElementById('friendNotice').classList.remove('on');
