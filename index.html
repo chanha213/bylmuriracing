@@ -463,27 +463,77 @@ function renderWallet() {
 }
 function paintVehicle(g, scale=1) {
   g.save(); g.scale(scale, scale);
-  const L = 92, W = 42;
-  g.fillStyle = 'rgba(15,23,42,.18)'; g.beginPath(); g.roundRect(-L/2+3,-W/2+4,L,W,10); g.fill();
-  const wheelColor = me.wheelStyle === 'white' ? '#f8fafc' : (me.wheelStyle === 'sport' ? '#111827' : '#334155');
-  const wheelStroke = me.wheelStyle === 'white' ? '#64748b' : '#0f172a';
-  g.fillStyle = wheelColor; g.strokeStyle = wheelStroke; g.lineWidth = 2;
-  [[-25,-W/2-3], [20,-W/2-3], [-25,W/2-5], [20,W/2-5]].forEach(([x,y]) => { g.beginPath(); g.roundRect(x,y,15,8,3); g.fill(); g.stroke(); });
-  g.fillStyle = me.vehicleColor || '#2563eb'; g.strokeStyle = 'rgba(15,23,42,.35)'; g.lineWidth = 1.5;
-  g.beginPath();
-  if (me.vehicleModel === 'rally') {
-    g.moveTo(-L/2+5,-W/2+4); g.lineTo(-L/2+15,-W/2); g.lineTo(L/2-12,-W/2); g.lineTo(L/2-3,-W/2+8); g.lineTo(L/2-3,W/2-8); g.lineTo(L/2-12,W/2); g.lineTo(-L/2+15,W/2); g.lineTo(-L/2+5,W/2-4);
-  } else if (me.vehicleModel === 'super') {
-    g.moveTo(-L/2+2,-W/2+5); g.lineTo(-L/2+18,-W/2+1); g.lineTo(L/2-13,-W/2+3); g.lineTo(L/2,W/2-3); g.lineTo(-L/2+18,W/2-1); g.lineTo(-L/2+2,W/2-5);
-  } else {
-    g.moveTo(-L/2+4,-W/2+7); g.lineTo(-L/2+16,-W/2+2); g.lineTo(L/2-14,-W/2+2); g.lineTo(L/2-3,-W/2+7); g.lineTo(L/2-3,W/2-7); g.lineTo(L/2-14,W/2-2); g.lineTo(-L/2+16,W/2-2); g.lineTo(-L/2+4,W/2-7);
+  const L=92, W=42, color=me.vehicleColor||'#2563eb';
+  const bodyPath=(inset=0)=>{
+    g.beginPath();
+    if(me.vehicleModel==='rally'){
+      g.moveTo(-L/2+7+inset,-W/2+5+inset); g.lineTo(-L/2+18,-W/2+inset);
+      g.lineTo(L/2-15-inset,-W/2+inset); g.lineTo(L/2-5-inset,-W/2+8);
+      g.lineTo(L/2-inset,W/2-8); g.lineTo(L/2-15-inset,W/2-inset);
+      g.lineTo(-L/2+18,W/2-inset); g.lineTo(-L/2+7+inset,W/2-5-inset);
+    } else if(me.vehicleModel==='super'){
+      g.moveTo(-L/2+3+inset,-W/2+7+inset); g.lineTo(-L/2+20,-W/2+2+inset);
+      g.lineTo(L/2-18-inset,-W/2+3+inset); g.lineTo(L/2-inset,-W/2+10);
+      g.lineTo(L/2-inset,W/2-10); g.lineTo(L/2-18-inset,W/2-3-inset);
+      g.lineTo(-L/2+20,W/2-2-inset); g.lineTo(-L/2+3+inset,W/2-7-inset);
+    } else {
+      g.moveTo(-L/2+5+inset,-W/2+8+inset); g.lineTo(-L/2+17,-W/2+2+inset);
+      g.lineTo(L/2-17-inset,-W/2+2+inset); g.lineTo(L/2-4-inset,-W/2+8);
+      g.lineTo(L/2-inset,W/2-8); g.lineTo(L/2-17-inset,W/2-2-inset);
+      g.lineTo(-L/2+17,W/2-2-inset); g.lineTo(-L/2+5+inset,W/2-8-inset);
+    }
+    g.closePath();
+  };
+  // Soft ground shadow and visible tire volume.
+  g.fillStyle='rgba(15,23,42,.28)'; g.beginPath(); g.ellipse(3,7,49,25,0,0,Math.PI*2); g.fill();
+  const wheelColor=me.wheelStyle==='white'?'#f8fafc':(me.wheelStyle==='sport'?'#111827':'#334155');
+  [[-25,-W/2-2],[20,-W/2-2],[-25,W/2-6],[20,W/2-6]].forEach(([x,y])=>{
+    g.fillStyle='#090f1c'; g.beginPath(); g.roundRect(x,y+3,16,10,4); g.fill();
+    g.fillStyle=wheelColor; g.beginPath(); g.roundRect(x+2,y+3,12,7,3); g.fill();
+    g.fillStyle='rgba(255,255,255,.45)'; g.fillRect(x+7,y+4,2,5);
+  });
+  // Lower body gives the car a raised, 2.5D silhouette.
+  g.save(); g.translate(0,5); bodyPath(); g.fillStyle='#101827'; g.fill(); g.restore();
+  const paint=g.createLinearGradient(0,-W/2,0,W/2);
+  paint.addColorStop(0,lightenVehicleColor(color,.34));
+  paint.addColorStop(.48,color);
+  paint.addColorStop(1,darkenVehicleColor(color,.34));
+  bodyPath(); g.fillStyle=paint; g.fill(); g.strokeStyle='rgba(8,15,28,.8)'; g.lineWidth=1.7; g.stroke();
+  // Raised shoulder highlights and sculpted hood.
+  g.strokeStyle='rgba(255,255,255,.36)'; g.lineWidth=1.4;
+  g.beginPath(); g.moveTo(-27,-15); g.quadraticCurveTo(2,-18,34,-13); g.stroke();
+  g.beginPath(); g.moveTo(-27,15); g.quadraticCurveTo(2,18,34,13); g.stroke();
+  // Dark panoramic glass, split into windshield and rear window.
+  g.fillStyle='#101c2d'; g.beginPath();
+  g.moveTo(-17,-15); g.lineTo(15,-14); g.lineTo(25,-9); g.lineTo(25,9);
+  g.lineTo(15,14); g.lineTo(-17,15); g.lineTo(-24,9); g.lineTo(-24,-9); g.closePath(); g.fill();
+  g.fillStyle='rgba(148,190,224,.8)'; g.beginPath();
+  g.moveTo(5,-12); g.lineTo(17,-10); g.lineTo(21,-6); g.lineTo(21,6);
+  g.lineTo(17,10); g.lineTo(5,12); g.closePath(); g.fill();
+  g.fillStyle='rgba(255,255,255,.2)'; g.beginPath(); g.moveTo(-19,-8); g.lineTo(-10,-12); g.lineTo(-2,-12); g.lineTo(-12,11); g.closePath(); g.fill();
+  // Front fascia, grille and LED headlights.
+  g.fillStyle='#172033'; g.beginPath(); g.roundRect(35,-9,7,18,3); g.fill();
+  g.fillStyle='#fef3c7'; g.shadowColor='#fff7cc'; g.shadowBlur=5;
+  g.beginPath(); g.roundRect(38,-14,5,8,2); g.fill();
+  g.beginPath(); g.roundRect(38,6,5,8,2); g.fill(); g.shadowBlur=0;
+  g.fillStyle='rgba(255,255,255,.5)'; g.fillRect(34,-17,5,2); g.fillRect(34,15,5,2);
+  // Rear lamps and bumper details.
+  g.fillStyle='#ef4444'; g.fillRect(-44,-14,4,8); g.fillRect(-44,6,4,8);
+  g.fillStyle='rgba(255,255,255,.28)'; g.fillRect(-39,-17,3,34);
+  if(me.spoiler){
+    g.fillStyle='#111827'; g.fillRect(-38,-23,5,46);
+    g.fillStyle='#334155'; g.beginPath(); g.roundRect(-44,-25,17,4,2); g.fill();
+    g.fillStyle='rgba(255,255,255,.35)'; g.fillRect(-42,-25,12,1);
   }
-  g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = '#0f172a'; g.beginPath(); g.roundRect(-13,-W/2+5,28,W-10,6); g.fill();
-  g.fillStyle = 'rgba(191,219,254,.88)'; g.beginPath(); g.roundRect(-10,-W/2+7,22,W-14,4); g.fill();
-  g.fillStyle = '#fef3c7'; g.fillRect(L/2-6,-W/2+8,4,7); g.fillRect(L/2-6,W/2-15,4,7);
-  if (me.spoiler) { g.fillStyle = '#111827'; g.fillRect(-L/2+5,-W/2-6,5,W+12); g.fillRect(-L/2+1,-W/2-8,13,4); }
   g.restore();
+}
+function lightenVehicleColor(hex,amount){
+  const n=parseInt(hex.slice(1),16); const r=n>>16,g=(n>>8)&255,b=n&255;
+  return 'rgb('+[r,g,b].map(v=>Math.round(v+(255-v)*amount)).join(',')+')';
+}
+function darkenVehicleColor(hex,amount){
+  const n=parseInt(hex.slice(1),16); const r=n>>16,g=(n>>8)&255,b=n&255;
+  return 'rgb('+[r,g,b].map(v=>Math.round(v*(1-amount))).join(',')+')';
 }
 function drawVehiclePreview(canvas, compact=false) {
   if (!canvas) return;
@@ -840,7 +890,7 @@ function render() {
   const theta = camMode === 'follow' ? -Math.PI/2 - car.a : -Math.PI/2;
   ctx.fillStyle = map.flat ? '#4f8d5d' : '#d9e4d3'; ctx.fillRect(0, 0, VW, VH);
   ctx.save();
-  const zm = map.zoom || 1;
+  const zm = (map.zoom || 1) * 1.5;
   ctx.translate(VW/2, VH*0.64); ctx.scale(zm, zm); ctx.rotate(theta); ctx.translate(-cx, -cy);
   const R = Math.min(2400, 640/zm), sx0 = Math.max(0, Math.floor(cx-R)), sy0 = Math.max(0, Math.floor(cy-R));
   const sw = Math.min(map.W, Math.ceil(cx+R)) - sx0, sh = Math.min(map.H, Math.ceil(cy+R)) - sy0;
