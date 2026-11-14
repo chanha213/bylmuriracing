@@ -88,6 +88,18 @@
   #touch { position:absolute; inset:auto 0 0 0; height:34%; display:none; pointer-events:none; }
   #touch .tb { position:absolute; bottom:14px; width:16%; aspect-ratio:1; max-width:90px; border-radius:50%; background:rgba(255,255,255,.28); border:2px solid rgba(255,255,255,.7); color:#fff; font-size:22px; pointer-events:auto; display:flex; align-items:center; justify-content:center; }
   #touch .tb.on { background:rgba(37,99,235,.7); }
+
+#friendsPanel{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(15,23,42,.78);overflow:auto}
+.friends-card{width:min(620px,100%);max-height:100%;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+.friends-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.friends-head h2{margin:0;font-size:20px;color:var(--ink)}
+.friend-section{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+.friend-section h3{margin:0 0 9px;font-size:13px;color:var(--ink)}
+.friend-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 2px;border-top:1px solid #f1f5f9;font-size:13px}
+.friend-actions{display:flex;gap:5px;flex-shrink:0}
+.friend-actions button{border:1px solid var(--line);background:#f8fafc;border-radius:7px;padding:6px 9px;font-size:11px;font-weight:700}
+#friendSearchInput{margin:0}
+#friendStatus{font-size:12px;line-height:1.5;color:var(--mute);min-height:18px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -134,6 +146,7 @@
       <div style="display:flex;gap:8px;margin-top:0">
         <button class="btn ghost" id="openGarage" type="button" style="margin-top:0">내 차고</button>
         <button class="btn ghost" id="openShop" type="button" style="margin-top:0">차량 상점</button>
+        <button class="btn ghost" id="openFriends" type="button" style="margin-top:0">친구 & 초대</button>
       </div>
       <button class="btn" id="start">레이스 시작</button>
       <div id="err"></div>
@@ -146,6 +159,17 @@
       <div class="credit" style="font-size:12px;color:#64748b;margin-top:2px;line-height:1.5">지도: NAVER 지도(국토지리정보원) 화면을 보고 직접 그린 일러스트예요.</div>
     </div>
   </div></div>
+
+  <div id="friendsPanel" role="dialog" aria-modal="true" aria-label="친구">
+    <div class="friends-card">
+      <div class="friends-head"><h2>친구 & 레이스 초대</h2><button class="tiny" id="closeFriends" type="button">닫기 ✕</button></div>
+      <div class="friend-section"><h3>친구 찾기</h3><div style="display:flex;gap:7px"><input id="friendSearchInput" type="text" maxlength="12" placeholder="친구 닉네임 입력" autocomplete="off"><button class="tiny" id="friendSearchBtn" type="button">검색</button></div><div id="friendSearchResult"></div></div>
+      <div class="friend-section"><h3>받은 친구 요청</h3><div id="friendRequestsList">로그인 후 표시됩니다.</div></div>
+      <div class="friend-section"><h3>내 친구</h3><div id="friendsList">로그인 후 표시됩니다.</div></div>
+      <div class="friend-section"><h3>받은 레이스 초대</h3><div id="raceInvitesList">로그인 후 표시됩니다.</div></div>
+      <div id="friendStatus"></div>
+    </div>
+  </div>
   <div id="garagePanel" role="dialog" aria-modal="true" aria-label="차고">
     <div class="garage-card">
       <div class="garage-head"><h2>내 차고</h2><button class="tiny" id="closeGarage" type="button">닫기 ✕</button></div>
@@ -186,7 +210,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, runTransaction, collection, query, where, onSnapshot, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyATM_3weFyRCGGVq6b2nlSaW0Gd9zDP3hA",
@@ -1212,6 +1236,106 @@ googleLogoutBtn.addEventListener('click', async () => {
   try { await signOut(firebaseAuth); }
   catch (error) { console.error('Google sign-out error:', error); accountStatusEl.textContent = '로그아웃에 실패했어요.'; }
 });
+
+async function reserveNicknameAndSaveProfile(profileRef, profile, oldNickname) {
+  const user = firebaseAuth.currentUser;
+  const nickname = String(profile.nickname || '').trim();
+  if (nickname.length < 2 || nickname.length > 12) throw new Error('닉네임은 2~12자로 입력해 주세요.');
+  const key = nickname.toLocaleLowerCase('ko-KR');
+  const nickRef = doc(firestore, 'nicknames', key);
+  const oldKey = String(oldNickname || '').trim().toLocaleLowerCase('ko-KR');
+  const oldRef = oldKey && oldKey !== key ? doc(firestore, 'nicknames', oldKey) : null;
+  await runTransaction(firestore, async tx => {
+    const snap = await tx.get(nickRef);
+    if (snap.exists() && snap.data().uid !== user.uid) {
+      const e = new Error('이미 사용 중인 닉네임입니다. 다른 닉네임을 선택해 주세요.');
+      e.code = 'nickname/taken'; throw e;
+    }
+    if (oldRef) {
+      const oldSnap = await tx.get(oldRef);
+      if (oldSnap.exists() && oldSnap.data().uid === user.uid) tx.delete(oldRef);
+    }
+    tx.set(nickRef, {uid:user.uid, nickname, updatedAt:serverTimestamp()});
+    tx.set(profileRef, profile, {merge:true});
+  });
+}
+let friendUnsubs = [];
+function stopFriendListeners(){friendUnsubs.forEach(fn=>{try{fn();}catch(e){}});friendUnsubs=[];}
+function friendStatus(msg){document.getElementById('friendStatus').textContent=msg;}
+function safeFriendText(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function addFriendRow(el,name,buttons){el.insertAdjacentHTML('beforeend','<div class="friend-row"><strong>'+safeFriendText(name)+'</strong><div class="friend-actions">'+buttons+'</div></div>');}
+function startFriendListeners(user){
+  stopFriendListeners();
+  const reqEl=document.getElementById('friendRequestsList'), friendsEl=document.getElementById('friendsList'), invitesEl=document.getElementById('raceInvitesList');
+  friendUnsubs.push(onSnapshot(query(collection(firestore,'friendRequests'),where('toUid','==',user.uid),where('status','==','pending')),snap=>{
+    reqEl.innerHTML=snap.empty?'<small>새 친구 요청이 없어요.</small>':'';
+    snap.forEach(d=>addFriendRow(reqEl,d.data().fromNickname||'레이서','<button data-accept-friend="'+d.id+'">수락</button><button data-decline-friend="'+d.id+'">거절</button>'));
+  },e=>{reqEl.textContent='친구 요청 로드 실패: Firestore 보안 규칙을 확인해 주세요.';console.error(e);}));
+  friendUnsubs.push(onSnapshot(collection(firestore,'users',user.uid,'friends'),snap=>{
+    friendsEl.innerHTML=snap.empty?'<small>아직 친구가 없어요. 닉네임으로 친구를 찾아보세요.</small>':'';
+    snap.forEach(d=>{const v=d.data();addFriendRow(friendsEl,v.nickname||'레이서','<button data-send-invite="'+v.uid+'" data-friend-name="'+safeFriendText(v.nickname||'친구')+'">레이스 초대</button><button data-remove-friend="'+v.uid+'">삭제</button>');});
+  },e=>{friendsEl.textContent='친구 목록을 불러오지 못했어요.';console.error(e);}));
+  friendUnsubs.push(onSnapshot(query(collection(firestore,'raceInvites'),where('toUid','==',user.uid),where('status','==','pending')),snap=>{
+    invitesEl.innerHTML=snap.empty?'<small>받은 초대가 없어요.</small>':'';
+    snap.forEach(d=>addFriendRow(invitesEl,(d.data().fromNickname||'친구')+'님의 레이스 초대','<button data-accept-invite="'+d.id+'">수락</button><button data-decline-invite="'+d.id+'">거절</button>'));
+  },e=>{invitesEl.textContent='초대 목록을 불러오지 못했어요.';console.error(e);}));
+}
+const friendsPanel=document.getElementById('friendsPanel');
+document.getElementById('openFriends').addEventListener('click',()=>{
+  friendsPanel.style.display='flex';
+  if(firebaseAuth.currentUser) startFriendListeners(firebaseAuth.currentUser);
+  else friendStatus('친구 기능을 사용하려면 먼저 Google 로그인을 해주세요.');
+});
+document.getElementById('closeFriends').addEventListener('click',()=>{friendsPanel.style.display='none';stopFriendListeners();});
+document.getElementById('friendSearchBtn').addEventListener('click',async()=>{
+  const user=firebaseAuth.currentUser, name=document.getElementById('friendSearchInput').value.trim(), out=document.getElementById('friendSearchResult');
+  if(!user){out.textContent='먼저 Google 로그인을 해주세요.';return;}
+  if(name.length<2){out.textContent='닉네임을 2자 이상 입력해 주세요.';return;}
+  out.textContent='검색 중...';
+  try{
+    const snap=await getDoc(doc(firestore,'nicknames',name.toLocaleLowerCase('ko-KR')));
+    if(!snap.exists()){out.textContent='해당 닉네임을 찾을 수 없어요.';return;}
+    const target=snap.data();
+    if(target.uid===user.uid){out.textContent='자기 자신은 추가할 수 없어요.';return;}
+    const existing=await getDoc(doc(firestore,'users',user.uid,'friends',target.uid));
+    if(existing.exists()){out.textContent='이미 친구로 등록되어 있어요.';return;}
+    out.innerHTML='';
+    addFriendRow(out,target.nickname,'<button id="sendFriendRequest">친구 요청</button>');
+    document.getElementById('sendFriendRequest').addEventListener('click',async()=>{
+      try{
+        const id=user.uid+'_'+target.uid;
+        await setDoc(doc(firestore,'friendRequests',id),{fromUid:user.uid,toUid:target.uid,fromNickname:me.nick||user.displayName||'레이서',status:'pending',createdAt:serverTimestamp()});
+        out.textContent='친구 요청을 보냈어요!';
+      }catch(e){console.error(e);out.textContent='요청 전송 실패. Firestore 보안 규칙을 확인해 주세요.';}
+    });
+  }catch(e){console.error(e);out.textContent='검색 실패. Firestore 보안 규칙을 확인해 주세요.';}
+});
+friendsPanel.addEventListener('click',async event=>{
+  const btn=event.target.closest('button'), user=firebaseAuth.currentUser;if(!btn||!user)return;
+  try{
+    if(btn.dataset.acceptFriend){
+      const ref=doc(firestore,'friendRequests',btn.dataset.acceptFriend), snap=await getDoc(ref);if(!snap.exists())return;const d=snap.data();
+      await runTransaction(firestore,async tx=>{
+        tx.set(doc(firestore,'users',user.uid,'friends',d.fromUid),{uid:d.fromUid,nickname:d.fromNickname||'레이서',addedAt:serverTimestamp()});
+        tx.set(doc(firestore,'users',d.fromUid,'friends',user.uid),{uid:user.uid,nickname:me.nick||user.displayName||'레이서',addedAt:serverTimestamp()});
+        tx.update(ref,{status:'accepted',respondedAt:serverTimestamp()});
+      });friendStatus('친구가 되었어요!');
+    }else if(btn.dataset.declineFriend){
+      await updateDoc(doc(firestore,'friendRequests',btn.dataset.declineFriend),{status:'declined',respondedAt:serverTimestamp()});
+    }else if(btn.dataset.removeFriend){
+      const id=btn.dataset.removeFriend;await deleteDoc(doc(firestore,'users',user.uid,'friends',id));await deleteDoc(doc(firestore,'users',id,'friends',user.uid));friendStatus('친구 목록에서 삭제했어요.');
+    }else if(btn.dataset.sendInvite){
+      await setDoc(doc(collection(firestore,'raceInvites')),{fromUid:user.uid,toUid:btn.dataset.sendInvite,fromNickname:me.nick||user.displayName||'레이서',status:'pending',createdAt:serverTimestamp(),mapId:selectedId});
+      friendStatus((btn.dataset.friendName||'친구')+'님에게 초대를 보냈어요!');
+    }else if(btn.dataset.acceptInvite){
+      await updateDoc(doc(firestore,'raceInvites',btn.dataset.acceptInvite),{status:'accepted',respondedAt:serverTimestamp()});
+      friendStatus('초대를 수락했어요. 실제 같은 레이스에서 만나는 기능은 다음 PvP 단계에서 연결할게요.');
+    }else if(btn.dataset.declineInvite){
+      await updateDoc(doc(firestore,'raceInvites',btn.dataset.declineInvite),{status:'declined',respondedAt:serverTimestamp()});
+    }
+  }catch(e){console.error(e);friendStatus('처리 실패. Firestore 보안 규칙을 확인해 주세요.');}
+});
+
 onAuthStateChanged(firebaseAuth, async user => {
   if (user) {
     accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요. 프로필 저장 중...';
@@ -1262,14 +1386,15 @@ onAuthStateChanged(firebaseAuth, async user => {
         lastLoginAt: serverTimestamp()
       };
       if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
-      await setDoc(profileRef, profile, { merge: true });
+      await reserveNicknameAndSaveProfile(profileRef, profile, saved.nickname || me.nick);
       renderLB(); renderMaps(); renderGarage(); renderWallet();
       accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 계정과 레이싱 기록 동기화 완료!';
     } catch (error) {
       console.error('Firestore profile save error:', error);
-      accountStatusEl.textContent = '로그인은 됐지만 프로필 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';
+      accountStatusEl.textContent = error.code === 'nickname/taken' ? '닉네임이 중복됐어요. 닉네임을 바꾼 뒤 다시 로그인해 주세요.' : '로그인은 됐지만 프로필 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';
     }
   } else {
+    stopFriendListeners();
     accountStatusEl.textContent = 'Google 계정으로 로그인하면 온라인 기능을 사용할 수 있어요.';
     googleLoginBtn.style.display = 'block';
     googleLogoutBtn.style.display = 'none';
