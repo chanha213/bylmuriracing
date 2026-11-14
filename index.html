@@ -487,7 +487,7 @@ function pushMe() {
 }
 function pushSeen() { if (!db || !uid) return; writeChain = writeChain.then(async () => { try { await db.doc('data/users/'+uid+'/state').set({ beaters: seen }); } catch(e){} }); }
 
-function nickOf(id) { const p = players[id]; return (p && p.nick) || 'Racer'; }
+function nickOf(id) { const p = players[id]; return (p && (p.nickname || p.nick)) || 'Racer'; }
 function checkNotices() {
   if (!seenLoaded || !playersLoaded) return;
   let changed = false; const fresh = [];
