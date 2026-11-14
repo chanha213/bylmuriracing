@@ -473,6 +473,8 @@ const vehicleDescriptions = {
   huracan:'최고속도와 가속력에 집중한 슈퍼 스포츠카'
 };
 const vehiclePrices = { avanteN:0, stinger:1800, gt3:4200, huracan:6800 };
+// Temporary account-only testing access. Remove this nickname rule after testing.
+const isVehicleTestAccount = () => (me.nick || '').trim() === '피아오';
 const VEHICLE_PHOTOS = {
   avanteN: 'https://www.hyundaimotorgroup.com/image/upload/asset_library/MDA00000000000004716/96a14c801f904579a62198a970d1adb9.jpg',
   stinger: 'https://mnd-assets.mynewsdesk.com/image/upload/c_fill%2Cdpr_auto%2Cf_auto%2Cg_auto%2Cq_auto%3Agood%2Cw_746/qcfijudyy7a6q41zenkp',
@@ -623,7 +625,7 @@ function drawVehiclePreview(container, compact=false) {
 }
 function renderGarage() {
   const list = $('modelOptions'); list.textContent = '';
-  me.ownedVehicles.filter(id=>vehicleNames[id]).forEach(id => {
+  (isVehicleTestAccount() ? Object.keys(vehicleNames) : me.ownedVehicles).filter(id=>vehicleNames[id]).forEach(id => {
     const b=document.createElement('button'); b.type='button'; b.className='garage-option'+(id===me.vehicleModel?' selected':'');
     b.dataset.model=id; b.textContent=vehicleNames[id]+(id===me.vehicleModel?' · 사용 중':' · 선택');
     list.appendChild(b);
@@ -650,7 +652,8 @@ shopPanel.addEventListener('click', event => { if (event.target === shopPanel) c
 $('modelOptions').addEventListener('click', event => {
   const b=event.target.closest('[data-model]'); if(!b)return;
   const id=b.dataset.model;
-  if (!me.ownedVehicles.includes(id)) return;
+  if (!me.ownedVehicles.includes(id) && !isVehicleTestAccount()) return;
+  if (!me.ownedVehicles.includes(id) && isVehicleTestAccount()) me.ownedVehicles.push(id);
   me.vehicleModel=id; persistLocal(); pushMe(); renderGarage();
   toast(vehicleNames[id]+' 선택 완료');
 });
@@ -664,13 +667,15 @@ function renderShop() {
     preview.appendChild(photo);
     const title=document.createElement('strong'); title.textContent=vehicleNames[id];
     const desc=document.createElement('p'); desc.textContent=vehicleDescriptions[id];
-    const price=document.createElement('div'); price.className='shop-price'; price.textContent=vehiclePrices[id]===0?'무료':vehiclePrices[id].toLocaleString('ko-KR')+' 코인';
+    const tester=isVehicleTestAccount();
+    const price=document.createElement('div'); price.className='shop-price'; price.textContent=tester?'테스트 계정 무료':(vehiclePrices[id]===0?'무료':vehiclePrices[id].toLocaleString('ko-KR')+' 코인');
     const button=document.createElement('button'); button.type='button'; button.className='btn'+(me.ownedVehicles.includes(id)?' ghost':'');
-    const owned=me.ownedVehicles.includes(id); button.textContent=owned?'보유 중':(me.coins>=vehiclePrices[id]?'구매하기':'코인 부족');
-    button.disabled=owned||me.coins<vehiclePrices[id];
+    const owned=me.ownedVehicles.includes(id); button.textContent=owned?'보유 중':(tester?'무료 해금':(me.coins>=vehiclePrices[id]?'구매하기':'코인 부족'));
+    button.disabled=owned||(!tester&&me.coins<vehiclePrices[id]);
     button.addEventListener('click',()=>{
-      if(me.ownedVehicles.includes(id)||me.coins<vehiclePrices[id])return;
-      me.coins-=vehiclePrices[id]; me.ownedVehicles.push(id);
+      if(me.ownedVehicles.includes(id)||(!tester&&me.coins<vehiclePrices[id]))return;
+      if (!tester) me.coins-=vehiclePrices[id];
+      me.ownedVehicles.push(id);
       persistLocal(); pushMe(); renderWallet(); renderShop(); renderGarage();
       toast(vehicleNames[id]+' 구매 완료! 내 차고에서 선택해 봐.');
     });
