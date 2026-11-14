@@ -884,7 +884,7 @@ async function loadGhostForMap(mapId) {
   });
   if (!user) { toast('고스트 레이싱은 Google 로그인 후 이용할 수 있어요.',1800); return; }
   try {
-    const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId),limit(50)));
+    const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId)));
     const rivals = [];
     snap.forEach(d => {
       const g=d.data();
@@ -950,21 +950,28 @@ function drawGhostCar() {
   const p=ghostPositionAt((raceT-lap.t0)*1000);
   if(!p)return;
   ctx.save();
-  ctx.translate(p.x,p.y);ctx.rotate(p.a);
-  ctx.save();ctx.scale(CAR_L/92,CAR_W/42);
+  ctx.globalAlpha=1;
+  ctx.translate(p.x,p.y);
+  ctx.rotate(p.a);
+  // 상대 계정의 차종·차체 색상·휠·스포일러를 그대로 사용한다.
+  ctx.save();
+  ctx.scale(CAR_L/92,CAR_W/42);
   paintVehicle(ctx,1,ghostOpponent.vehicleModel||'avanteN',ghostOpponent.vehicleColor||'#2563eb',{
     wheelStyle:ghostOpponent.wheelStyle||'street',spoiler:!!ghostOpponent.spoiler
   });
   ctx.restore();
-  // 실제 차량처럼 불투명하게 표시하고, 차량 위에 상대 닉네임을 고정한다.
+  // 차량 위에 항상 읽을 수 있는 닉네임 플레이트를 표시한다.
   ctx.rotate(-p.a);
   const nick=String(ghostOpponent.nickname||'상대 레이서').slice(0,12);
-  ctx.font='700 12px -apple-system,"Pretendard","Noto Sans KR",sans-serif';
-  const w=Math.max(58,ctx.measureText(nick).width+18);
-  const lx=0, ly=-30;
-  ctx.fillStyle='rgba(15,23,42,.88)';
-  ctx.beginPath();ctx.roundRect(lx-w/2,ly-11,w,22,7);ctx.fill();
-  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(nick,lx,ly);
+  ctx.font='800 14px -apple-system,"Pretendard","Noto Sans KR",sans-serif';
+  const w=Math.max(68,ctx.measureText(nick).width+22);
+  const ly=-38;
+  ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=7;
+  ctx.fillStyle='rgba(15,23,42,.96)';
+  ctx.beginPath();ctx.roundRect(-w/2,ly-13,w,26,8);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(nick,0,ly);
   ctx.restore();
 }
 function spawnTrackCoins() {
