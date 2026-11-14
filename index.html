@@ -566,7 +566,7 @@ function renderGarage() {
   document.querySelectorAll('[data-wheel]').forEach(b => b.classList.toggle('selected', b.dataset.wheel === me.wheelStyle));
   document.querySelectorAll('[data-spoiler]').forEach(b => b.classList.toggle('selected', (b.dataset.spoiler === 'on') === !!me.spoiler));
   document.querySelectorAll('[data-car-color]').forEach(b => b.classList.toggle('selected', b.dataset.carColor === me.vehicleColor));
-  $('menuCarName').textContent = vehicleNames[me.vehicleModel] || vehicleNames.street;
+  $('menuCarName').textContent = vehicleNames[me.vehicleModel] || vehicleNames.avanteN;
   drawVehiclePreview($('garagePreview'));
   drawVehiclePreview($('menuCarPreview'), true);
 }
@@ -814,7 +814,7 @@ function stepCar(dt, inputOK) {
   const angleBefore = car.a;
   let c = Math.cos(car.a), s = Math.sin(car.a);
   let vf = car.vx*c + car.vy*s, vl = -car.vx*s + car.vy*c;
-  const stats = VEHICLE_STATS[me.vehicleModel] || VEHICLE_STATS.street;
+  const stats = VEHICLE_STATS[me.vehicleModel] || VEHICLE_STATS.avanteN;
   boosting = inputOK && keys.boost && boostMeter > 0.02;
   boostMeter = boosting ? Math.max(0, boostMeter - dt*0.45) : Math.min(1, boostMeter + dt*0.15);
   const baseMax = MAXV*stats.speed;
