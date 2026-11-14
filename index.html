@@ -85,6 +85,12 @@
     <div class="col">
       <h2>맵 선택</h2>
       <div class="maps" id="maps"></div>
+      <div id="accountBox" style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:6px">온라인 계정</div>
+        <div id="accountStatus" style="font-size:12px;color:#64748b;margin-bottom:8px">Google 계정으로 로그인하면 온라인 기능을 사용할 수 있어요.</div>
+        <button class="btn ghost" id="googleLogin" type="button" style="margin-top:0">Google로 로그인</button>
+        <button class="btn ghost" id="googleLogout" type="button" style="display:none;margin-top:6px">로그아웃</button>
+      </div>
       <label for="nick">닉네임</label>
       <input type="text" id="nick" maxlength="12" autocomplete="off">
       <button class="btn" id="start">레이스 시작</button>
@@ -102,7 +108,24 @@
   </div></div>
 </div></div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyATM_3weFyRCGGVq6b2nlSaW0Gd9zDP3hA",
+  authDomain: "byulmuriracing.firebaseapp.com",
+  projectId: "byulmuriracing",
+  storageBucket: "byulmuriracing.firebasestorage.app",
+  messagingSenderId: "1073434471068",
+  appId: "1:1073434471068:web:123ae2237acde4bb5d9b59",
+  measurementId: "G-X8DP42FFZK"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const firebaseAuth = getAuth(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+window.byulmuriAuth = firebaseAuth;
+
 (() => {
 'use strict';
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -615,6 +638,46 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 renderMaps(); renderLB(); initShared();
+
+const accountStatusEl = document.getElementById('accountStatus');
+const googleLoginBtn = document.getElementById('googleLogin');
+const googleLogoutBtn = document.getElementById('googleLogout');
+const nickInput = document.getElementById('nick');
+googleLoginBtn.addEventListener('click', async () => {
+  googleLoginBtn.disabled = true;
+  accountStatusEl.textContent = 'Google 로그인 창을 여는 중...';
+  try {
+    const result = await signInWithPopup(firebaseAuth, googleProvider);
+    const user = result.user;
+    accountStatusEl.textContent = (user.displayName || 'Google 사용자') + ' 계정으로 로그인했어요.';
+    if (user.displayName && !nickInput.value.trim()) nickInput.value = user.displayName.slice(0, 12);
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    accountStatusEl.textContent = error.code === 'auth/unauthorized-domain'
+      ? '이 도메인이 Firebase 승인 도메인에 등록되지 않았어요. Firebase Authentication 설정을 확인해 주세요.'
+      : error.code === 'auth/operation-not-allowed'
+        ? 'Firebase에서 Google 로그인 제공업체를 먼저 활성화해 주세요.'
+        : '로그인에 실패했어요: ' + (error.message || error.code);
+  } finally {
+    googleLoginBtn.disabled = false;
+  }
+});
+googleLogoutBtn.addEventListener('click', async () => {
+  try { await signOut(firebaseAuth); }
+  catch (error) { console.error('Google sign-out error:', error); accountStatusEl.textContent = '로그아웃에 실패했어요.'; }
+});
+onAuthStateChanged(firebaseAuth, user => {
+  if (user) {
+    accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요.';
+    googleLoginBtn.style.display = 'none';
+    googleLogoutBtn.style.display = 'block';
+    if (user.displayName && !nickInput.value.trim()) nickInput.value = user.displayName.slice(0, 12);
+  } else {
+    accountStatusEl.textContent = 'Google 계정으로 로그인하면 온라인 기능을 사용할 수 있어요.';
+    googleLoginBtn.style.display = 'block';
+    googleLogoutBtn.style.display = 'none';
+  }
+});
 window.__dbg = { get map(){return map;}, car, keys, get lap(){return lap;}, get mode(){return mode;}, get me(){return me;}, startRace, fmt, get notices(){return notices;}, get players(){return players;}, stepCar };
 })();
 </script>
