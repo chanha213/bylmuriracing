@@ -872,7 +872,7 @@ function saveGhostRecord(mapId, ms, samples) {
   const user = firebaseAuth.currentUser;
   if (user) {
     setDoc(doc(firestore,'ghosts',mapId+'_'+user.uid),record,{merge:true})
-      .then(()=>{ if (!ghostOpponent || record.bestMs < ghostOpponent.bestMs) ghostOpponent=record; })
+      .then(()=>{})
       .catch(e=>{console.error('고스트 업로드 실패:',e);toast('고스트 온라인 저장 실패 · Firestore 규칙을 확인해 주세요',2400);});
   }
 }
@@ -1189,7 +1189,7 @@ function updateLap(dt, moved, prevX, prevY) {
       const okCp = map.cps.length ? lap.visited.size >= map.cps.length : (lap.dist > 1200 && lap.maxFar > map.maxDim*0.2);
       if (okCp) {
         const ms = (tNow - lap.t0) * 1000;
-        if (lap.ghostSamples && lap.ghostSamples.length) lap.ghostSamples.push({t:ms,x:car.x,y:car.y,a:car.a});
+        if (lap.ghostSamples && lap.ghostSamples.length) { while(lap.ghostSamples.length>1 && lap.ghostSamples[lap.ghostSamples.length-1].t>=ms) lap.ghostSamples.pop(); lap.ghostSamples.push({t:ms,x:car.x,y:car.y,a:car.a}); }
         lap.n++; lap.last = ms; lap.dist = 0; lap.maxFar = 0; lap.visited = new Set();
         lap.times.push(ms); onLap(ms, lap.n < LAPS);
         lap.ghostSamples=[{t:0,x:car.x,y:car.y,a:car.a}];lap.ghostSampleAt=100;
