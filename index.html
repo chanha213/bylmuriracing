@@ -884,19 +884,20 @@ async function loadGhostForMap(mapId) {
   });
   if (!user) { toast('고스트 레이싱은 Google 로그인 후 이용할 수 있어요.',1800); return; }
   try {
-    const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId)));
+    const snap = await getDocs(collection(firestore,'ghosts'));
     const rivals = [];
     snap.forEach(d => {
       const g=d.data();
-      if (g.uid !== user.uid && Array.isArray(g.laps) && g.laps.length === LAPS &&
+      if (g.mapId === mapId && g.uid !== user.uid &&
+          Array.isArray(g.laps) && g.laps.length === LAPS &&
           g.laps.every(a=>Array.isArray(a) && a.length>=2) &&
           Array.isArray(g.lapTimes) && g.lapTimes.length===LAPS &&
           Number.isFinite(g.totalMs)) rivals.push(g);
     });
     rivals.sort((a,b)=>a.totalMs-b.totalMs);
     ghostOpponent = rivals[0] || null;
-    if (ghostOpponent) toast('상대 차량 로드 완료 · '+(ghostOpponent.nickname||'레이서')+' · '+fmt(ghostOpponent.totalMs),2600);
-    else toast(snap.empty ? '이 코스에 저장된 고스트가 없어요. 다른 계정으로 3랩 완주해 주세요.' : '저장된 기록 '+snap.size+'개 중 다른 계정의 3랩 기록이 없어요.',3000);
+    if (ghostOpponent) toast('상대 차량 표시 준비 완료 · '+(ghostOpponent.nickname||'레이서'),3000);
+    else toast('고스트 없음: 전체 '+snap.size+'개 기록 중 이 맵의 다른 계정 3랩 기록을 찾지 못했어요.',4000);
   } catch (e) {
     console.warn('고스트 기록을 불러오지 못했어요. Firestore 규칙을 확인해 주세요.',e);
     toast('온라인 고스트를 불러오지 못했어요.',2000);
@@ -932,7 +933,7 @@ async function saveGhostRecord(mapId, totalMs, lapSamples, lapTimes) {
   }
 }
 function ghostPositionAt(elapsedMs) {
-  const samples=ghostOpponent && ghostOpponent.laps && ghostOpponent.laps[lap.n];
+  const samples=ghostOpponent && ghostOpponent.laps && ghostOpponent.laps[Math.min(LAPS-1,Math.max(0,lap.n))];
   if (!samples || samples.length < 2) return null;
   if (elapsedMs <= samples[0].t) return samples[0];
   for(let i=1;i<samples.length;i++){
@@ -946,8 +947,9 @@ function ghostPositionAt(elapsedMs) {
   return samples[samples.length-1];
 }
 function drawGhostCar() {
-  if (!ghostOpponent || mode!=='race' || !lap.started || lap.n>=LAPS) return;
-  const p=ghostPositionAt((raceT-lap.t0)*1000);
+  if (!ghostOpponent || !['countdown','race'].includes(mode) || lap.n>=LAPS) return;
+  // 출발선을 아직 통과하지 않았다면 상대 차량의 해당 랩 출발 위치를 보여준다.
+  const p=ghostPositionAt(lap.started ? (raceT-lap.t0)*1000 : 0);
   if(!p)return;
   ctx.save();
   ctx.globalAlpha=1;
