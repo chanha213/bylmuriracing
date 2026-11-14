@@ -704,7 +704,7 @@ function resetCar() {
   car.x = map.start.x; car.y = map.start.y; car.a = map.start.a; car.vx = car.vy = car.vf = car.vl = car.steer = 0;
   reverseWarningActive = false;
   const warningEl = document.getElementById("reverseWarning"); if (warningEl) warningEl.classList.remove("on");
-  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, secretDrift:false, reverseDist:0, secretReverse:false, wrongWay:false, rewardGranted:false };
+  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, driftDirection:0, secretDrift:false, secretReverse:false, wrongWay:false, rewardGranted:false };
   spawnTrackCoins();
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
   raceT = 0; boostMeter = 1; boosting = false;
@@ -738,7 +738,7 @@ function finishRace() {
     const n=claimMission('secret_360_drift',500); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 360도 드리프트 +'+n);}
   }
   if (lap.secretReverse) {
-    const n=claimMission('secret_reverse_120',350); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 역주행 120m +'+n);}
+    const n=claimMission('secret_reverse_finish_500',500); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 후진으로 결승선 통과 +'+n);}
   }
   me.coins = Math.max(0, Math.floor(Number(me.coins) || 0)) + reward;
   persistLocal(); renderWallet(); renderGarage();
@@ -835,11 +835,18 @@ function stepCar(dt, inputOK) {
   car.a += car.steer * rate * dt;
   const turnDelta = wrap(car.a - angleBefore);
   if (mode === 'race') {
-    if (hand && Math.abs(vl) > 52 && Math.abs(vf) > 95) {
-      lap.driftRotation = (lap.driftRotation || 0) + Math.abs(turnDelta);
-      if (lap.driftRotation >= Math.PI*2) lap.secretDrift = true;
+    const driftDir = keys.right ? 1 : (keys.left ? -1 : 0);
+    if (hand && driftDir && Math.abs(vf) > 70) {
+      if (lap.driftDirection && lap.driftDirection !== driftDir) lap.driftRotation = 0;
+      lap.driftDirection = driftDir;
+      lap.driftRotation = (lap.driftRotation || 0) + Math.max(0, turnDelta * driftDir);
+      if (lap.driftRotation >= Math.PI*2) {
+        lap.secretDrift = true;
+        toast('🏁 비밀 도전 달성! 360도 드리프트 성공', 2200);
+      }
     } else {
       lap.driftRotation = 0;
+      lap.driftDirection = 0;
     }
   }
   c = Math.cos(car.a); s = Math.sin(car.a);
@@ -867,10 +874,6 @@ function stepCar(dt, inputOK) {
   // 후진 기어 사용은 역주행으로 취급하지 않는다.
   const warningEl = document.getElementById('reverseWarning');
   if (warningEl) warningEl.classList.toggle('on', mode === 'race' && !!lap.wrongWay);
-  if (mode === 'race' && lap.wrongWay && car.vf > 70) {
-    lap.reverseDist = (lap.reverseDist || 0) + moved*M_PER_PX;
-    if (lap.reverseDist >= 120) lap.secretReverse = true;
-  }
   // 스키드마크
   if (Math.abs(car.vl) > 85 || (hand && Math.abs(car.vf) > 150)) {
     tg.strokeStyle = 'rgba(15,23,42,.28)'; tg.lineWidth = 3;
@@ -891,6 +894,10 @@ function updateLap(dt, moved, prevX, prevY) {
   const inStartGate = Math.abs(along) < map.half + 10;
   const crossed = lap.prevS < 0 && s >= 0 && inStartGate;
   const crossedWrongWay = lap.prevS > 0 && s <= 0 && inStartGate;
+  if (crossedWrongWay && car.vf < -40 && !lap.secretReverse) {
+    lap.secretReverse = true;
+    toast('🪙 비밀 도전 달성! 후진으로 결승선 통과 · +500 코인', 2600);
+  }
   if (crossedWrongWay && !lap.wrongWay) {
     lap.wrongWay = true;
     const warningEl = document.getElementById('reverseWarning');
