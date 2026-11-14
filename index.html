@@ -836,7 +836,7 @@ function stepCar(dt, inputOK) {
     if (hand && Math.abs(vl) > 52 && Math.abs(vf) > 95) {
       lap.driftRotation = (lap.driftRotation || 0) + Math.abs(turnDelta);
       if (lap.driftRotation >= Math.PI*2) lap.secretDrift = true;
-    } else if (!hand || Math.abs(vf) < 70) {
+    } else {
       lap.driftRotation = 0;
     }
   }
@@ -863,7 +863,7 @@ function stepCar(dt, inputOK) {
   car.vf = car.vx*c + car.vy*s; car.vl = -car.vx*s + car.vy*c;
   const moved = Math.hypot(car.x-ox, car.y-oy);
   if (mode === 'race' && car.vf < -70) {
-    lap.reverseDist = (lap.reverseDist || 0) + moved;
+    lap.reverseDist = (lap.reverseDist || 0) + moved*M_PER_PX;
     if (lap.reverseDist >= 120) lap.secretReverse = true;
   }
   // 스키드마크
