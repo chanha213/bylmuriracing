@@ -704,7 +704,7 @@ function resetCar() {
   car.x = map.start.x; car.y = map.start.y; car.a = map.start.a; car.vx = car.vy = car.vf = car.vl = car.steer = 0;
   reverseWarningActive = false;
   const warningEl = document.getElementById("reverseWarning"); if (warningEl) warningEl.classList.remove("on");
-  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, secretDrift:false, reverseDist:0, secretReverse:false, rewardGranted:false };
+  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, secretDrift:false, reverseDist:0, secretReverse:false, wrongWay:false, rewardGranted:false };
   spawnTrackCoins();
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
   raceT = 0; boostMeter = 1; boosting = false;
@@ -864,12 +864,10 @@ function stepCar(dt, inputOK) {
   c = Math.cos(car.a); s = Math.sin(car.a);
   car.vf = car.vx*c + car.vy*s; car.vl = -car.vx*s + car.vy*c;
   const moved = Math.hypot(car.x-ox, car.y-oy);
-  const reversing = mode === 'race' && car.vf < -55;
+  // 후진 기어 사용은 역주행으로 취급하지 않는다.
   const warningEl = document.getElementById('reverseWarning');
-  if (warningEl) warningEl.classList.toggle('on', reversing);
-  if (reversing && !reverseWarningActive) toast('⚠️ 역주행 중입니다! 진행 방향을 확인하세요', 1800);
-  reverseWarningActive = reversing;
-  if (mode === 'race' && car.vf < -70) {
+  if (warningEl) warningEl.classList.toggle('on', mode === 'race' && !!lap.wrongWay);
+  if (mode === 'race' && lap.wrongWay && car.vf > 70) {
     lap.reverseDist = (lap.reverseDist || 0) + moved*M_PER_PX;
     if (lap.reverseDist >= 120) lap.secretReverse = true;
   }
@@ -890,7 +888,21 @@ function updateLap(dt, moved, prevX, prevY) {
     for (let k=0;k<pts.length;k+=2) if (Math.abs(pts[k][0]-car.x) < 34 && Math.abs(pts[k][1]-car.y) < 34) { lap.visited.add(i); break; } });
   const gx = map.g.x, gy = map.g.y, n = map.n, t = map.t;
   const s = (car.x-gx)*n.x + (car.y-gy)*n.y, along = (car.x-gx)*t.x + (car.y-gy)*t.y;
-  const crossed = lap.prevS < 0 && s >= 0 && Math.abs(along) < map.half + 10;
+  const inStartGate = Math.abs(along) < map.half + 10;
+  const crossed = lap.prevS < 0 && s >= 0 && inStartGate;
+  const crossedWrongWay = lap.prevS > 0 && s <= 0 && inStartGate;
+  if (crossedWrongWay && !lap.wrongWay) {
+    lap.wrongWay = true;
+    const warningEl = document.getElementById('reverseWarning');
+    if (warningEl) warningEl.classList.add('on');
+    toast('⚠️ 역주행! 코스 진행 방향과 반대로 주행 중입니다', 2600);
+  }
+  if (crossed && lap.wrongWay) {
+    lap.wrongWay = false;
+    const warningEl = document.getElementById('reverseWarning');
+    if (warningEl) warningEl.classList.remove('on');
+    toast('주행 방향이 정상으로 돌아왔습니다', 1800);
+  }
   if (crossed) {
     const frac = (-lap.prevS) / ((s - lap.prevS) || 1);          // 이번 스텝 안에서 선을 넘은 시점
     const tNow = raceT - dt*(1 - frac);
