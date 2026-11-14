@@ -111,6 +111,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyATM_3weFyRCGGVq6b2nlSaW0Gd9zDP3hA",
@@ -123,6 +124,7 @@ const firebaseConfig = {
 };
 const firebaseApp = initializeApp(firebaseConfig);
 const firebaseAuth = getAuth(firebaseApp);
+const firestore = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 window.byulmuriAuth = firebaseAuth;
 
@@ -666,12 +668,30 @@ googleLogoutBtn.addEventListener('click', async () => {
   try { await signOut(firebaseAuth); }
   catch (error) { console.error('Google sign-out error:', error); accountStatusEl.textContent = '로그아웃에 실패했어요.'; }
 });
-onAuthStateChanged(firebaseAuth, user => {
+onAuthStateChanged(firebaseAuth, async user => {
   if (user) {
-    accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요.';
+    accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요. 프로필 저장 중...';
     googleLoginBtn.style.display = 'none';
     googleLogoutBtn.style.display = 'block';
     if (user.displayName && !nickInput.value.trim()) nickInput.value = user.displayName.slice(0, 12);
+    try {
+      const profileRef = doc(firestore, 'users', user.uid);
+      const profileSnap = await getDoc(profileRef);
+      const profile = {
+        uid: user.uid,
+        nickname: (nickInput.value.trim() || user.displayName || '레이서').slice(0, 12),
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        email: user.email || '',
+        lastLoginAt: serverTimestamp()
+      };
+      if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
+      await setDoc(profileRef, profile, { merge: true });
+      accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 로그인 및 프로필 저장 완료!';
+    } catch (error) {
+      console.error('Firestore profile save error:', error);
+      accountStatusEl.textContent = '로그인은 됐지만 프로필 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';
+    }
   } else {
     accountStatusEl.textContent = 'Google 계정으로 로그인하면 온라인 기능을 사용할 수 있어요.';
     googleLoginBtn.style.display = 'block';
