@@ -549,8 +549,10 @@ function renderWallet() {
   if ($('garageCoins')) $('garageCoins').textContent = '보유 코인 ' + me.coins.toLocaleString('ko-KR');
   if ($('shopCoins')) $('shopCoins').textContent = '보유 코인 ' + me.coins.toLocaleString('ko-KR');
 }
-function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null) {
+function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, customization=null) {
   g.save(); g.scale(scale, scale);
+  const vehicleWheelStyle=customization?.wheelStyle || me.wheelStyle;
+  const vehicleSpoiler=customization?.spoiler ?? me.spoiler;
   const id = modelId || 'avanteN';
   const L=92, W=42, color=colorOverride||me.vehicleColor||'#2563eb';
   const isStinger=id==='stinger', isGT3=id==='gt3', isHuracan=id==='huracan';
@@ -582,7 +584,7 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null) {
   };
   // 그림자와 차종별 차폭
   g.fillStyle='rgba(15,23,42,.32)'; g.beginPath(); g.ellipse(3,7,isHuracan?48:49,isGT3?24:25,0,0,Math.PI*2); g.fill();
-  const wheelColor=me.wheelStyle==='white'?'#f8fafc':(me.wheelStyle==='sport'?'#111827':'#334155');
+  const wheelColor=vehicleWheelStyle==='white'?'#f8fafc':(vehicleWheelStyle==='sport'?'#111827':'#334155');
   const wheelXs=isHuracan?[-25,22]:isGT3?[-27,20]:[-25,20];
   wheelXs.forEach(x=>[-1,1].forEach(side=>{
     const y=side<0?-W/2-2:W/2-8;
@@ -656,7 +658,7 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null) {
   // 후면 램프와 차종별 리어 디퓨저/스포일러
   g.fillStyle='#ef4444'; g.fillRect(-45,-14,4,8); g.fillRect(-45,6,4,8);
   g.fillStyle='rgba(255,255,255,.28)'; g.fillRect(-40,-17,3,34);
-  if(isGT3 || me.spoiler){
+  if(isGT3 || vehicleSpoiler){
     g.fillStyle='#111827'; g.fillRect(-38,-23,5,46);
     g.fillStyle='#334155'; g.beginPath(); g.roundRect(-46,-25,20,4,2); g.fill();
     g.fillStyle='rgba(255,255,255,.35)'; g.fillRect(-43,-25,13,1);
@@ -875,7 +877,11 @@ async function startRace() {
 }
 async function loadGhostForMap(mapId) {
   ghostOpponent = null;
-  const user = firebaseAuth.currentUser;
+  // Firebase Auth가 초기화되기 전의 순간적인 null을 피한다.
+  const user = firebaseAuth.currentUser || await new Promise(resolve => {
+    let unsub = () => {};
+    unsub = onAuthStateChanged(firebaseAuth, u => { unsub(); resolve(u); }, () => resolve(null));
+  });
   if (!user) { toast('고스트 레이싱은 Google 로그인 후 이용할 수 있어요.',1800); return; }
   try {
     const snap = await getDocs(query(collection(firestore,'ghosts'),where('mapId','==',mapId),limit(50)));
@@ -889,8 +895,8 @@ async function loadGhostForMap(mapId) {
     });
     rivals.sort((a,b)=>a.totalMs-b.totalMs);
     ghostOpponent = rivals[0] || null;
-    if (ghostOpponent) toast('👻 '+(ghostOpponent.nickname||'상대 레이서')+' · 3랩 최고 기록 '+fmt(ghostOpponent.totalMs),2600);
-    else toast('이 코스에 다른 계정의 3랩 고스트 기록이 아직 없어요.',2400);
+    if (ghostOpponent) toast('상대 차량 로드 완료 · '+(ghostOpponent.nickname||'레이서')+' · '+fmt(ghostOpponent.totalMs),2600);
+    else toast(snap.empty ? '이 코스에 저장된 고스트가 없어요. 다른 계정으로 3랩 완주해 주세요.' : '저장된 기록 '+snap.size+'개 중 다른 계정의 3랩 기록이 없어요.',3000);
   } catch (e) {
     console.warn('고스트 기록을 불러오지 못했어요. Firestore 규칙을 확인해 주세요.',e);
     toast('온라인 고스트를 불러오지 못했어요.',2000);
@@ -914,6 +920,7 @@ async function saveGhostRecord(mapId, totalMs, lapSamples, lapTimes) {
       uid:user.uid,nickname:me.nick||'레이서',mapId,totalMs:Math.round(totalMs),
       lapTimes:lapTimes.map(Math.round),laps:cleanLaps,
       vehicleModel:me.vehicleModel,vehicleColor:me.vehicleColor,
+      wheelStyle:me.wheelStyle||'street',spoiler:!!me.spoiler,
       updatedAt:serverTimestamp()
     };
     await setDoc(ref,record,{merge:true});
@@ -942,11 +949,22 @@ function drawGhostCar() {
   if (!ghostOpponent || mode!=='race' || !lap.started || lap.n>=LAPS) return;
   const p=ghostPositionAt((raceT-lap.t0)*1000);
   if(!p)return;
-  ctx.save();ctx.globalAlpha=.42;ctx.translate(p.x,p.y);ctx.rotate(p.a);
+  ctx.save();
+  ctx.translate(p.x,p.y);ctx.rotate(p.a);
   ctx.save();ctx.scale(CAR_L/92,CAR_W/42);
-  paintVehicle(ctx,1,ghostOpponent.vehicleModel||'avanteN',ghostOpponent.vehicleColor||'#22d3ee');
+  paintVehicle(ctx,1,ghostOpponent.vehicleModel||'avanteN',ghostOpponent.vehicleColor||'#2563eb',{
+    wheelStyle:ghostOpponent.wheelStyle||'street',spoiler:!!ghostOpponent.spoiler
+  });
   ctx.restore();
-  ctx.strokeStyle='#67e8f9';ctx.lineWidth=2.2;ctx.strokeRect(-CAR_L/2-2,-CAR_W/2-2,CAR_L+4,CAR_W+4);
+  // 실제 차량처럼 불투명하게 표시하고, 차량 위에 상대 닉네임을 고정한다.
+  ctx.rotate(-p.a);
+  const nick=String(ghostOpponent.nickname||'상대 레이서').slice(0,12);
+  ctx.font='700 12px -apple-system,"Pretendard","Noto Sans KR",sans-serif';
+  const w=Math.max(58,ctx.measureText(nick).width+18);
+  const lx=p.x, ly=p.y-30;
+  ctx.fillStyle='rgba(15,23,42,.88)';
+  ctx.beginPath();ctx.roundRect(lx-w/2,ly-11,w,22,7);ctx.fill();
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(nick,lx,ly);
   ctx.restore();
 }
 function spawnTrackCoins() {
