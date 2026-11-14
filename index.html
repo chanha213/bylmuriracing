@@ -84,6 +84,9 @@
     <div class="rt" id="rTitle">레이스 완료</div>
     <div class="rbig" id="rTotal"></div>
     <div class="rbadge" id="rBadge"></div>
+    <div id="rReward" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px;margin:8px 0 12px;font-size:14px;font-weight:700;color:#92400e"></div>
+    <button class="btn ghost" id="adRewardBtn" type="button" disabled>보상형 광고 · 준비 중</button>
+    <div style="font-size:11px;color:#64748b;margin:5px 0 10px">광고 네트워크 연결 후 광고 시청으로 추가 코인을 받을 수 있어요.</div>
     <ol id="rLaps"></ol>
     <div class="rbtns"><button class="btn" id="rAgain">다시 달리기</button><button class="btn ghost" id="rMenu">메뉴로 돌아가기</button></div>
   </div></div>
@@ -94,7 +97,8 @@
     <button class="tb" data-k="boost" style="right:3%">»</button>
   </div>
   <div id="menu"><div class="card">
-    <h1>드론 서킷<small>탑다운 레이싱 · 기록 경쟁</small></h1>
+    <h1>Byulmuri Racing<small>레이싱 · 기록 경쟁</small></h1>
+    <div id="wallet" style="grid-column:1/-1;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;font-size:14px;font-weight:800;color:#92400e">🪙 0 코인</div>
     <div id="notice"></div>
     <div class="col">
       <h2>맵 선택</h2>
@@ -128,6 +132,7 @@
   <div id="garagePanel" role="dialog" aria-modal="true" aria-label="차고">
     <div class="garage-card">
       <div class="garage-head"><h2>내 차고</h2><button class="tiny" id="closeGarage" type="button">닫기 ✕</button></div>
+      <div id="garageCoins" style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:10px">보유 코인 0</div>
       <div class="garage-preview"><canvas id="garagePreview" width="560" height="150"></canvas></div>
       <div class="garage-section"><h3>차량 모델</h3><div class="garage-options" id="modelOptions">
         <button class="garage-option" data-model="street" type="button">스트리트 쿠페</button>
@@ -319,13 +324,19 @@ let trail = null, tg = null;
 let raceT = 0, cdT = 0;
 let lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best:null, dist:0, maxFar:0, visited:null, prevS:0 };
 let sessionDist = 0, unsavedDist = 0;
+let trackCoins = [], raceCoins = 0;
 const LAPS = 3;   // 한 번의 레이스 = 3랩
 let toastTimer = 0;
 
 /* ===================== 저장/공유 =====================*/
 const LS = 'droneRacer.v1';
-let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'street', wheelStyle:'street', spoiler:false };
+let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'street', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['street'], missionClaims:{} };
 try { const s = JSON.parse(localStorage.getItem(LS)||'null'); if (s) me = Object.assign(me, s); } catch(e){}
+me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
+me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['street', ...me.ownedVehicles])] : ['street'];
+if (['street','rally','super'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
+me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
+if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'street';
 if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
 const persistLocal = () => { try { localStorage.setItem(LS, JSON.stringify(me)); } catch(e){} };
 
@@ -376,6 +387,9 @@ function pushMe() {
       vehicleModel: me.vehicleModel,
       wheelStyle: me.wheelStyle,
       spoiler: !!me.spoiler,
+      coins: me.coins,
+      ownedVehicles: me.ownedVehicles,
+      missionClaims: me.missionClaims,
       recordsUpdatedAt: serverTimestamp()
     }, { merge: true }).catch(error => {
       console.error('Firestore race data save error:', error);
@@ -426,6 +440,12 @@ nickEl.value = me.nick;
 nickEl.addEventListener('change', () => { me.nick = (nickEl.value.trim() || me.nick).slice(0,12); nickEl.value = me.nick; pushMe(); renderLB(); });
 const garagePanel = $('garagePanel');
 const vehicleNames = { street:'스트리트 쿠페', rally:'랠리 해치백', super:'슈퍼카' };
+const vehiclePrices = { street:0, rally:1200, super:5000 };
+function renderWallet() {
+  const label = '🪙 ' + me.coins.toLocaleString('ko-KR') + ' 코인';
+  if ($('wallet')) $('wallet').textContent = label;
+  if ($('garageCoins')) $('garageCoins').textContent = '보유 코인 ' + me.coins.toLocaleString('ko-KR');
+}
 function paintVehicle(g, scale=1) {
   g.save(); g.scale(scale, scale);
   const L = 92, W = 42;
@@ -458,7 +478,13 @@ function drawVehiclePreview(canvas, compact=false) {
   g.save(); g.translate(w/2,h/2); g.scale(compact ? .72 : 1.18, compact ? .72 : 1.18); paintVehicle(g,1); g.restore();
 }
 function renderGarage() {
-  document.querySelectorAll('[data-model]').forEach(b => b.classList.toggle('selected', b.dataset.model === me.vehicleModel));
+  document.querySelectorAll('[data-model]').forEach(b => {
+    const id = b.dataset.model, owned = me.ownedVehicles.includes(id);
+    b.classList.toggle('selected', id === me.vehicleModel);
+    b.textContent = vehicleNames[id] + (owned ? ' · 보유' : ' · ' + vehiclePrices[id].toLocaleString('ko-KR') + ' 코인');
+    b.style.opacity = owned ? '1' : '.78';
+  });
+  renderWallet();
   document.querySelectorAll('[data-wheel]').forEach(b => b.classList.toggle('selected', b.dataset.wheel === me.wheelStyle));
   document.querySelectorAll('[data-spoiler]').forEach(b => b.classList.toggle('selected', (b.dataset.spoiler === 'on') === !!me.spoiler));
   document.querySelectorAll('[data-car-color]').forEach(b => b.classList.toggle('selected', b.dataset.carColor === me.vehicleColor));
@@ -467,13 +493,23 @@ function renderGarage() {
   drawVehiclePreview($('menuCarPreview'), true);
 }
 function saveVehicleSettings() {
-  persistLocal(); pushMe(); renderGarage();
+  persistLocal(); pushMe(); renderGarage(); renderWallet();
   $('garageStatus').textContent = firebaseAuth.currentUser ? '차량 외형을 저장했어요. 계정과 동기화됩니다.' : '차량 외형을 이 기기에 저장했어요. 로그인하면 다른 기기와 동기화할 수 있어요.';
 }
 $('openGarage').addEventListener('click', () => { renderGarage(); garagePanel.style.display='flex'; });
 $('closeGarage').addEventListener('click', () => { garagePanel.style.display='none'; });
 garagePanel.addEventListener('click', event => { if (event.target === garagePanel) garagePanel.style.display='none'; });
-$('modelOptions').addEventListener('click', event => { const b=event.target.closest('[data-model]'); if(!b)return; me.vehicleModel=b.dataset.model; renderGarage(); });
+$('modelOptions').addEventListener('click', event => {
+  const b=event.target.closest('[data-model]'); if(!b)return;
+  const id=b.dataset.model;
+  if (!me.ownedVehicles.includes(id)) {
+    const price=vehiclePrices[id] || 0;
+    if (me.coins < price) { toast('코인이 부족해요. 레이스에서 코인을 모아 보세요.'); return; }
+    me.coins -= price; me.ownedVehicles.push(id);
+    toast(vehicleNames[id] + ' 구매 완료!');
+  }
+  me.vehicleModel=id; persistLocal(); pushMe(); renderGarage();
+});
 $('wheelOptions').addEventListener('click', event => { const b=event.target.closest('[data-wheel]'); if(!b)return; me.wheelStyle=b.dataset.wheel; renderGarage(); });
 $('spoilerOptions').addEventListener('click', event => { const b=event.target.closest('[data-spoiler]'); if(!b)return; me.spoiler=b.dataset.spoiler==='on'; renderGarage(); });
 $('garageColors').addEventListener('click', event => { const b=event.target.closest('[data-car-color]'); if(!b)return; me.vehicleColor=b.dataset.carColor; renderGarage(); });
@@ -530,20 +566,72 @@ async function startRace() {
   $('result').style.display = 'none'; resetCar(); $('menu').style.display = 'none'; $('menuBtn').style.display = 'block'; mode = 'countdown'; cdT = 3.2;
   if (matchMedia('(pointer:coarse)').matches) $('touch').style.display = 'block';
 }
+function spawnTrackCoins() {
+  trackCoins = []; raceCoins = 0;
+  if (!mapDef || mapDef.custom) return;
+  const target = 8, minSpacing = 105;
+  for (let tries=0; tries<6000 && trackCoins.length<target; tries++) {
+    const ix = Math.floor(Math.random()*map.mw), iy = Math.floor(Math.random()*map.mh);
+    if (!map.mask[iy*map.mw+ix]) continue;
+    const x=(ix+.5)*map.k, y=(iy+.5)*map.k;
+    if (Math.hypot(x-map.start.x,y-map.start.y)<150) continue;
+    if (trackCoins.some(c=>Math.hypot(c.x-x,c.y-y)<minSpacing)) continue;
+    trackCoins.push({x,y,taken:false});
+  }
+}
+function collectTrackCoins() {
+  if (!trackCoins.length || mode!=='race') return;
+  let got=0;
+  for (const c of trackCoins) if (!c.taken && Math.hypot(car.x-c.x,car.y-c.y)<27) { c.taken=true; got+=10; }
+  if (got) { raceCoins+=got; toast('코인 +' + got, 850); }
+}
+function drawTrackCoins() {
+  for (const c of trackCoins) {
+    if (c.taken) continue;
+    ctx.save(); ctx.translate(c.x,c.y);
+    ctx.shadowColor='rgba(120,53,15,.35)'; ctx.shadowBlur=7;
+    ctx.fillStyle='#facc15'; ctx.strokeStyle='#a16207'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur=0; ctx.fillStyle='#fff7cc'; ctx.beginPath(); ctx.arc(-3,-3,3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#854d0e'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('₵',1,1);
+    ctx.restore();
+  }
+}
 function resetCar() {
   car.x = map.start.x; car.y = map.start.y; car.a = map.start.a; car.vx = car.vy = car.vf = car.vl = car.steer = 0;
-  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0 };
+  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true };
+  spawnTrackCoins();
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
   raceT = 0; boostMeter = 1; boosting = false;
   trail = document.createElement('canvas'); trail.width = map.mw; trail.height = map.mh; tg = trail.getContext('2d'); tg.setTransform(1/map.k, 0, 0, 1/map.k, 0, 0);
   tg.lineCap = 'round';
 }
+function claimMission(key, amount) {
+  if (me.missionClaims[key]) return 0;
+  me.missionClaims[key]=true;
+  return amount;
+}
 function finishRace() {
   mode = 'finish'; flushDist(); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
   const tot = lap.times.reduce((a,b)=>a+b,0), bestRun = Math.min(...lap.times);
+  let reward = 30 + raceCoins;
+  const rewardParts = ['완주 +30', '코인 수집 +' + raceCoins];
+  if (!mapDef.custom && mapDef.id === 'hoecho') {
+    if (lap.times.some(t=>t<=10000)) {
+      const n=claimMission('hoecho_sub10_lap',100); if(n){reward+=n;rewardParts.push('10초 이내 랩 최초 달성 +'+n);}
+    }
+    if (lap.times.length===LAPS && lap.times.every(t=>t<=10000)) {
+      const n=claimMission('hoecho_all3_sub10',400); if(n){reward+=n;rewardParts.push('3랩 모두 10초 이내 +'+n);}
+    }
+  }
+  if (!mapDef.custom && lap.clean) {
+    const n=claimMission('clean_finish_'+mapDef.id,150); if(n){reward+=n;rewardParts.push('무충돌 완주 최초 달성 +'+n);}
+  }
+  me.coins += reward; persistLocal(); pushMe(); renderWallet(); renderGarage();
   $('rTitle').textContent = '레이스 완료 · ' + (mapDef.name || '');
   $('rTotal').textContent = fmt(tot);
   $('rBadge').textContent = lap.pb ? '개인 최고 기록 갱신!' : '';
+  $('rReward').textContent = '🪙 +' + reward.toLocaleString('ko-KR') + ' 코인 · ' + rewardParts.join(' / ');
   const ol = $('rLaps'); ol.textContent = '';
   lap.times.forEach((t,i) => { const li = document.createElement('li'); if (t === bestRun) li.className = 'best'; const a = document.createElement('span'), b = document.createElement('span'); a.textContent = 'LAP ' + (i+1); b.textContent = fmt(t); li.append(a, b); ol.appendChild(li); });
   $('result').style.display = 'flex'; $('touch').style.display = 'none';
@@ -591,6 +679,11 @@ $('file').onchange = async e => {
 
 /* ===================== 물리 =====================*/
 const MAXV = 480, ACC = 520, BRK = 900;
+const VEHICLE_STATS = {
+  street: { speed:1, accel:1, handling:1, grip:1 },
+  rally:  { speed:.96, accel:1.12, handling:1.13, grip:1.12 },
+  super:  { speed:1.12, accel:1.16, handling:.94, grip:.94 }
+};
 const roadAt = (x, y) => { x = (x/map.k)|0; y = (y/map.k)|0; return (x<0||y<0||x>=map.mw||y>=map.mh) ? 0 : map.mask[y*map.mw + x]; };
 const PROBES = [[.5,.42],[.5,-.42],[-.5,.42],[-.5,-.42],[.5,0],[-.5,0],[0,.45],[0,-.45]];
 function blocked(x, y, a) {
@@ -611,17 +704,19 @@ function stepCar(dt, inputOK) {
   car.steer += (tgt - car.steer) * Math.min(1, dt*6.5);      // 부드러운 조향 입력
   let c = Math.cos(car.a), s = Math.sin(car.a);
   let vf = car.vx*c + car.vy*s, vl = -car.vx*s + car.vy*c;
+  const stats = VEHICLE_STATS[me.vehicleModel] || VEHICLE_STATS.street;
   boosting = inputOK && keys.boost && boostMeter > 0.02;
   boostMeter = boosting ? Math.max(0, boostMeter - dt*0.45) : Math.min(1, boostMeter + dt*0.15);
-  const maxv = MAXV*(boosting ? 1.3 : 1);
-  if (inputOK && !brk) vf += ACC*(boosting ? 2.2 : 1)*dt*Math.max(0, 1 - vf/maxv);   // 자동 전진
+  const baseMax = MAXV*stats.speed;
+  const maxv = baseMax*(boosting ? 1.3 : 1);
+  if (inputOK && !brk) vf += ACC*stats.accel*(boosting ? 2.2 : 1)*dt*Math.max(0, 1 - vf/maxv);   // 자동 전진
   if (brk) vf = Math.max(0, vf - BRK*dt);
   vf -= vf*0.45*dt;
   if (vf > maxv) vf -= (vf-maxv)*3*dt;
-  const grip = hand ? 3 : 8.5;
+  const grip = hand ? 3 : 8.5*stats.grip;
   vl *= Math.exp(-grip*dt); if (hand) vf *= Math.exp(-0.4*dt);
-  const sp = Math.min(1, Math.abs(vf)/MAXV);
-  const rate = 2.3 * Math.max(0.4, Math.min(1, Math.abs(vf)/140)) * (1 - 0.3*sp) * (hand ? 1.3 : 1);
+  const sp = Math.min(1, Math.abs(vf)/baseMax);
+  const rate = 2.3 * stats.handling * Math.max(0.4, Math.min(1, Math.abs(vf)/140)) * (1 - 0.3*sp) * (hand ? 1.3 : 1);
   car.a += car.steer * rate * dt;
   c = Math.cos(car.a); s = Math.sin(car.a);
   car.vx = c*vf - s*vl; car.vy = s*vf + c*vl;
@@ -631,6 +726,7 @@ function stepCar(dt, inputOK) {
   // 벽: 도로 밖으로 나가지 못하고 가장자리를 따라 미끄러짐
   let hit = 0;
   if (blocked(car.x, car.y, car.a)) {
+    if (inputOK && mode === 'race') lap.clean = false;
     const n = wallNormal(car.x, car.y);
     if (n) {
       for (let i=0; i<16 && blocked(car.x, car.y, car.a); i++) { car.x += n.x*2; car.y += n.y*2; }
@@ -710,16 +806,18 @@ function render() {
   const R = Math.min(2400, 640/zm), sx0 = Math.max(0, Math.floor(cx-R)), sy0 = Math.max(0, Math.floor(cy-R));
   const sw = Math.min(map.W, Math.ceil(cx+R)) - sx0, sh = Math.min(map.H, Math.ceil(cy+R)) - sy0;
   if (sw > 0 && sh > 0) { const kk = map.k; ctx.drawImage(map.world, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); ctx.drawImage(trail, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); }
+  drawTrackCoins();
   drawCar();
   ctx.restore();
 
   // HUD
   const cur = lap.started ? (raceT - lap.t0)*1000 : null;
-  ctx.fillStyle = 'rgba(15,23,42,.62)'; ctx.beginPath(); ctx.roundRect(14, 14, 214, 96, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(15,23,42,.62)'; ctx.beginPath(); ctx.roundRect(14, 14, 214, 120, 10); ctx.fill();
   text(cur == null ? '출발선을 통과하면 시작' : fmt(cur), 26, 44, cur == null ? 14 : 26, '#fff');
   text('LAP ' + Math.min(LAPS, lap.n + (lap.started?1:0)) + ' / ' + LAPS, 26, 68, 13, '#cbd5e1', 'left', 600);
   text('이전 ' + fmt(lap.last), 26, 88, 13, '#cbd5e1', 'left', 500);
   text('최고 ' + fmt(lap.best), 26, 104, 13, '#93c5fd', 'left', 600);
+  text('이번 레이스 코인 +' + raceCoins, 26, 124, 13, '#fde68a', 'left', 700);
   ctx.fillStyle = 'rgba(15,23,42,.62)'; ctx.beginPath(); ctx.roundRect(VW-174, 14, 160, 60, 10); ctx.fill();
   text(Math.round(Math.abs(car.vf)*M_PER_PX*3.6) + ' km/h', VW-26, 42, 22, '#fff', 'right');
   text('이번 주행 ' + (km(sessionDist)).toFixed(2) + ' km', VW-26, 62, 12, '#cbd5e1', 'right', 500);
@@ -751,6 +849,7 @@ function frame(now) {
       raceT += dt;
       const px = car.x, py = car.y, moved = stepCar(dt, true);
       sessionDist += moved; unsavedDist += moved;
+      collectTrackCoins();
       updateLap(dt, moved, px, py);
     }
   }
@@ -758,7 +857,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-renderMaps(); renderLB(); initShared();
+renderMaps(); renderLB(); renderWallet(); initShared();
 
 const accountStatusEl = document.getElementById('accountStatus');
 const googleLoginBtn = document.getElementById('googleLogin');
@@ -812,6 +911,10 @@ onAuthStateChanged(firebaseAuth, async user => {
       me.vehicleModel = ['street','rally','super'].includes(saved.vehicleModel) ? saved.vehicleModel : (me.vehicleModel || 'street');
       me.wheelStyle = ['street','sport','white'].includes(saved.wheelStyle) ? saved.wheelStyle : (me.wheelStyle || 'street');
       me.spoiler = typeof saved.spoiler === 'boolean' ? saved.spoiler : !!me.spoiler;
+      if (typeof saved.coins === 'number') me.coins = Math.max(0, Math.floor(saved.coins));
+      me.ownedVehicles = [...new Set(['street', ...(me.ownedVehicles||[]), ...(Array.isArray(saved.ownedVehicles)?saved.ownedVehicles:[])])];
+      me.missionClaims = Object.assign({}, me.missionClaims, saved.missionClaims || {});
+      if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'street';
       nickInput.value = me.nick;
       persistLocal();
       const profile = {
@@ -823,6 +926,9 @@ onAuthStateChanged(firebaseAuth, async user => {
         vehicleModel: me.vehicleModel,
         wheelStyle: me.wheelStyle,
         spoiler: !!me.spoiler,
+        coins: me.coins,
+        ownedVehicles: me.ownedVehicles,
+        missionClaims: me.missionClaims,
         email: user.email || '',
         bests: me.bests,
         dist: me.dist,
@@ -831,7 +937,7 @@ onAuthStateChanged(firebaseAuth, async user => {
       };
       if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
       await setDoc(profileRef, profile, { merge: true });
-      renderLB(); renderMaps(); renderGarage();
+      renderLB(); renderMaps(); renderGarage(); renderWallet();
       accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 계정과 레이싱 기록 동기화 완료!';
     } catch (error) {
       console.error('Firestore profile save error:', error);
