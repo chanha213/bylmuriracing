@@ -53,7 +53,14 @@
   .garage-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
   .garage-head h2 { margin:0; font-size:20px; }
   .garage-preview { background:linear-gradient(135deg,#e2e8f0,#f8fafc); border:1px solid var(--line); border-radius:12px; padding:8px; margin-bottom:16px; }
-  #garagePreview { display:block; width:100%; height:150px; }
+  #garagePreview { display:block; width:100%; height:220px; }
+  .vehicle-photo { overflow:hidden; background:linear-gradient(135deg,#111827,#334155); border-radius:9px; position:relative; }
+  .vehicle-photo img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 58%; }
+  .menu-vehicle-photo { width:112px; height:64px; flex:0 0 112px; }
+  .garage-vehicle-photo { width:100%; height:220px; }
+  .photo-caption { font-size:10px; color:#64748b; text-align:right; padding:5px 2px 0; }
+  .shop-item .vehicle-photo { width:100%; height:120px; }
+  .shop-item .vehicle-photo img { object-fit:cover; }
   .garage-section { margin:14px 0; }
   .garage-section h3 { font-size:12px; color:var(--mute); margin:0 0 8px; letter-spacing:.04em; }
   .garage-options { display:flex; flex-wrap:wrap; gap:8px; }
@@ -121,7 +128,7 @@
       <label for="nick">닉네임</label>
       <input type="text" id="nick" maxlength="12" autocomplete="off">
       <div style="display:flex;align-items:center;gap:12px;margin:8px 0 12px">
-        <canvas id="menuCarPreview" width="112" height="64" style="width:112px;height:64px;background:#f1f5f9;border-radius:9px"></canvas>
+        <div id="menuCarPreview" class="vehicle-photo menu-vehicle-photo"><img alt="선택한 드림카 공식 이미지"></div>
         <div style="flex:1;min-width:0"><div id="menuCarName" style="font-size:14px;font-weight:800">스트리트 쿠페</div><div style="font-size:12px;color:#64748b">나만의 레이싱 머신</div></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:0">
@@ -143,7 +150,7 @@
     <div class="garage-card">
       <div class="garage-head"><h2>내 차고</h2><button class="tiny" id="closeGarage" type="button">닫기 ✕</button></div>
       <div id="garageCoins" style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:10px">보유 코인 0</div>
-      <div class="garage-preview"><canvas id="garagePreview" width="560" height="150"></canvas></div>
+      <div class="garage-preview"><div id="garagePreview" class="vehicle-photo garage-vehicle-photo"><img alt="선택한 차량 제조사 이미지"></div><div class="photo-caption">실제 차량 공식 이미지 · 차고 전시용</div></div>
       <div class="garage-section"><h3>보유 차량</h3><div class="garage-options" id="modelOptions"></div></div>
       <div class="garage-section"><h3>차체 색상</h3><div id="garageColors">
         <button type="button" data-car-color="#2563eb" aria-label="레이싱 블루" title="레이싱 블루" style="background:#2563eb"></button>
@@ -466,6 +473,18 @@ const vehicleDescriptions = {
   huracan:'최고속도와 가속력에 집중한 슈퍼 스포츠카'
 };
 const vehiclePrices = { avanteN:0, stinger:1800, gt3:4200, huracan:6800 };
+const VEHICLE_PHOTOS = {
+  avanteN: 'https://www.hyundaimotorgroup.com/image/upload/asset_library/MDA00000000000004716/96a14c801f904579a62198a970d1adb9.jpg',
+  stinger: 'https://mnd-assets.mynewsdesk.com/image/upload/c_fill%2Cdpr_auto%2Cf_auto%2Cg_auto%2Cq_auto%3Agood%2Cw_746/qcfijudyy7a6q41zenkp',
+  gt3: 'https://porschepictures.flowcenter.de/pmdb/thumbnail.cgi?crop=1&cs=26dad879ffb42d4c&h=812&id=305547&public=1&w=1440',
+  huracan: 'https://www.lamborghini.com/sites/it-en/files/DAM/lamborghini/news/2020/01_04_evo_rwd/04.jpg'
+};
+const VEHICLE_PHOTO_CREDITS = {
+  avanteN: 'Hyundai Motor Group',
+  stinger: 'Kia Sweden / Mynewsdesk',
+  gt3: 'Porsche AG',
+  huracan: 'Automobili Lamborghini'
+};
 function renderWallet() {
   const label = '🪙 ' + me.coins.toLocaleString('ko-KR') + ' 코인';
   if ($('wallet')) $('wallet').textContent = label;
@@ -551,12 +570,20 @@ function darkenVehicleColor(hex,amount){
   const n=parseInt(hex.slice(1),16); const r=n>>16,g=(n>>8)&255,b=n&255;
   return 'rgb('+[r,g,b].map(v=>Math.round(v*(1-amount))).join(',')+')';
 }
-function drawVehiclePreview(canvas, compact=false) {
-  if (!canvas) return;
-  const g = canvas.getContext('2d'), w=canvas.width, h=canvas.height;
-  g.clearRect(0,0,w,h);
-  g.fillStyle = compact ? '#f1f5f9' : '#e2e8f0'; g.fillRect(0,0,w,h);
-  g.save(); g.translate(w/2,h/2); g.scale(compact ? .72 : 1.18, compact ? .72 : 1.18); paintVehicle(g,1); g.restore();
+function drawVehiclePreview(container, compact=false) {
+  if (!container) return;
+  const id = me.vehicleModel || 'avanteN';
+  const src = VEHICLE_PHOTOS[id] || VEHICLE_PHOTOS.avanteN;
+  let img = container.querySelector('img');
+  if (!img) { img = document.createElement('img'); container.appendChild(img); }
+  img.src = src;
+  img.alt = (vehicleNames[id] || '선택한 차량') + ' 제조사 공식 사진';
+  img.loading = 'eager';
+  img.decoding = 'async';
+  if (!compact) {
+    const caption = container.parentElement && container.parentElement.querySelector('.photo-caption');
+    if (caption) caption.textContent = '실제 차량 이미지 · ' + (VEHICLE_PHOTO_CREDITS[id] || '제조사');
+  }
 }
 function renderGarage() {
   const list = $('modelOptions'); list.textContent = '';
@@ -595,9 +622,10 @@ function renderShop() {
   const root=$('shopCatalog'); root.textContent='';
   Object.keys(vehicleNames).forEach((id,index)=>{
     const item=document.createElement('div'); item.className='shop-item';
-    const preview=document.createElement('canvas'); preview.width=360; preview.height=96;
-    const g=preview.getContext('2d'); g.fillStyle='#e2e8f0'; g.fillRect(0,0,preview.width,preview.height);
-    g.save(); g.translate(180,48); g.scale(.9,.9); const old=me.vehicleModel; me.vehicleModel=id; paintVehicle(g,1); me.vehicleModel=old; g.restore();
+    const preview=document.createElement('div'); preview.className='vehicle-photo';
+    const photo=document.createElement('img'); photo.src=VEHICLE_PHOTOS[id] || VEHICLE_PHOTOS.avanteN;
+    photo.alt=vehicleNames[id] + ' 제조사 차량 사진'; photo.loading='lazy'; photo.decoding='async';
+    preview.appendChild(photo);
     const title=document.createElement('strong'); title.textContent=vehicleNames[id];
     const desc=document.createElement('p'); desc.textContent=vehicleDescriptions[id];
     const price=document.createElement('div'); price.className='shop-price'; price.textContent=vehiclePrices[id]===0?'무료':vehiclePrices[id].toLocaleString('ko-KR')+' 코인';
@@ -610,7 +638,8 @@ function renderShop() {
       persistLocal(); pushMe(); renderWallet(); renderShop(); renderGarage();
       toast(vehicleNames[id]+' 구매 완료! 내 차고에서 선택해 봐.');
     });
-    item.append(preview,title,desc,price,button); root.appendChild(item);
+    const credit=document.createElement('small'); credit.style.cssText='color:#64748b;font-size:10px'; credit.textContent='이미지: '+(VEHICLE_PHOTO_CREDITS[id]||'제조사');
+    item.append(preview,title,desc,credit,price,button); root.appendChild(item);
   });
   renderWallet();
 }
