@@ -845,9 +845,20 @@ async function startRace() {
   const def = MAPS.find(m => m.id === selectedId);
   if (!def) { showErr('맵을 찾을 수 없어요.'); return; }
   $('start').disabled = true; $('start').textContent = '맵 분석 중…';
-  try { map = await getMap(def); mapDef = def; await loadGhostForMap(def.id); }
-  catch (e) { showErr(e.message || '맵을 불러오지 못했어요.'); return; }
-  finally { $('start').disabled = false; $('start').textContent = '레이스 시작'; }
+  try {
+    map = await getMap(def);
+    mapDef = def;
+  } catch (e) {
+    console.error('맵 로드 실패:', e);
+    showErr(e.message || '맵을 불러오지 못했어요.');
+    $('start').disabled = false;
+    $('start').textContent = '레이스 시작';
+    return;
+  }
+  $('start').disabled = false;
+  $('start').textContent = '레이스 시작';
+  // Ghost lookup must never block the race start (Firestore may be slow/offline).
+  loadGhostForMap(def.id).catch(e => console.warn('고스트 로드 실패:', e));
   $('result').style.display = 'none'; resetCar(); $('menu').style.display = 'none'; $('menuBtn').style.display = 'block'; mode = 'countdown'; cdT = 3.2;
   if (matchMedia('(pointer:coarse)').matches) $('touch').style.display = 'block';
 }
