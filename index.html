@@ -315,12 +315,26 @@ async function initShared() {
 }
 const hasAnyRecord = () => Object.keys(me.bests).length || Object.values(me.dist).some(v => v > 0);
 function pushMe() {
-  persistLocal(); if (!db || !uid) return;
+  persistLocal();
+  const user = firebaseAuth.currentUser;
+  if (user) {
+    setDoc(doc(firestore, 'users', user.uid), {
+      nickname: me.nick,
+      bests: me.bests,
+      dist: me.dist,
+      laps: me.laps,
+      recordsUpdatedAt: serverTimestamp()
+    }, { merge: true }).catch(error => {
+      console.error('Firestore race data save error:', error);
+      setStatus('온라인 기록 저장에 실패했어요. 로그인과 Firestore 규칙을 확인해 주세요.');
+    });
+  }
+  if (!db || !uid) return;
   dirty = true;
   writeChain = writeChain.then(async () => {
     if (!dirty) return; dirty = false;
-    const doc = { nick: me.nick, bests: me.bests, dist: me.dist, laps: me.laps, updatedAt: Date.now() };
-    try { await db.doc('players/'+uid).set(doc); } catch (e) { if (e && e.code === 'unavailable') { dirty = true; } else setStatus('기록 저장 권한이 없어요. 보기 전용이면 저장되지 않아요.'); }
+    const legacyDoc = { nick: me.nick, bests: me.bests, dist: me.dist, laps: me.laps, updatedAt: Date.now() };
+    try { await db.doc('players/'+uid).set(legacyDoc); } catch (e) { if (e && e.code === 'unavailable') { dirty = true; } else setStatus('기록 저장 권한이 없어요. 보기 전용이면 저장되지 않아요.'); }
   });
 }
 function pushSeen() { if (!db || !uid) return; writeChain = writeChain.then(async () => { try { await db.doc('data/users/'+uid+'/state').set({ beaters: seen }); } catch(e){} }); }
@@ -677,17 +691,35 @@ onAuthStateChanged(firebaseAuth, async user => {
     try {
       const profileRef = doc(firestore, 'users', user.uid);
       const profileSnap = await getDoc(profileRef);
+      const saved = profileSnap.exists() ? profileSnap.data() : {};
+      // Merge cloud records with this device: keep the faster best lap and larger totals.
+      for (const [mapId, ms] of Object.entries(saved.bests || {})) {
+        if (typeof ms === 'number' && (me.bests[mapId] == null || ms < me.bests[mapId])) me.bests[mapId] = ms;
+      }
+      for (const [mapId, value] of Object.entries(saved.dist || {})) {
+        if (typeof value === 'number') me.dist[mapId] = Math.max(me.dist[mapId] || 0, value);
+      }
+      for (const [mapId, value] of Object.entries(saved.laps || {})) {
+        if (typeof value === 'number') me.laps[mapId] = Math.max(me.laps[mapId] || 0, value);
+      }
+      me.nick = (saved.nickname || nickInput.value.trim() || user.displayName || me.nick || '레이서').slice(0, 12);
+      nickInput.value = me.nick;
+      persistLocal();
       const profile = {
         uid: user.uid,
-        nickname: (nickInput.value.trim() || user.displayName || '레이서').slice(0, 12),
+        nickname: me.nick,
         displayName: user.displayName || '',
         photoURL: user.photoURL || '',
         email: user.email || '',
+        bests: me.bests,
+        dist: me.dist,
+        laps: me.laps,
         lastLoginAt: serverTimestamp()
       };
       if (!profileSnap.exists()) profile.createdAt = serverTimestamp();
       await setDoc(profileRef, profile, { merge: true });
-      accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 로그인 및 프로필 저장 완료!';
+      renderLB(); renderMaps();
+      accountStatusEl.textContent = (profile.nickname || '레이서') + '님, 계정과 레이싱 기록 동기화 완료!';
     } catch (error) {
       console.error('Firestore profile save error:', error);
       accountStatusEl.textContent = '로그인은 됐지만 프로필 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';
