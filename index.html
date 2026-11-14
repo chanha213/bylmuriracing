@@ -534,7 +534,7 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel) {
   }));
   g.save(); g.translate(0,5); bodyPath(); g.fillStyle='#101827'; g.fill(); g.restore();
   const paint=g.createLinearGradient(0,-W/2,0,W/2);
-  paint.addColorStop(0,lightenVehicleColor(color,isHuracan?.42:.34));
+  paint.addColorStop(0,lightenVehicleColor(color,isHuracan ? 0.42 : 0.34));
   paint.addColorStop(.48,color);
   paint.addColorStop(1,darkenVehicleColor(color,.36));
   bodyPath(); g.fillStyle=paint; g.fill(); g.strokeStyle='rgba(8,15,28,.88)'; g.lineWidth=1.8; g.stroke();
