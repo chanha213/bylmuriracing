@@ -828,7 +828,7 @@ function renderLB() {
   const tb = document.querySelector('#lb tbody'); tb.textContent = '';
   $('lbTitle').textContent = '리더보드 · ' + mapName(selectedId);
   const rows = {};
-  Object.entries(players).forEach(([id,p]) => { if (p.bests && typeof p.bests[selectedId]==='number') rows[id] = { id, nick:p.nick||'Racer', best:p.bests[selectedId], dist:Object.values(p.dist||{}).reduce((a,b)=>a+b,0) }; });
+  Object.entries(players).forEach(([id,p]) => { if (p.bests && typeof p.bests[selectedId]==='number') rows[id] = { id, nick:p.nickname||p.nick||'Racer', best:p.bests[selectedId], dist:Object.values(p.dist||{}).reduce((a,b)=>a+b,0) }; });
   if (me.bests[selectedId] != null && (!uid || !rows[uid])) rows[uid||'__me'] = { id:uid||'__me', nick:me.nick, best:me.bests[selectedId], dist:totalDist() };
   const list = Object.values(rows).sort((a,b)=>a.best-b.best).slice(0,10);
   if (!list.length) { const tr = tb.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.textContent = '아직 기록이 없어요. 첫 기록의 주인공이 되어 보세요.'; return; }
