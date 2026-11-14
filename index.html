@@ -139,6 +139,7 @@
       </div>
       <label for="nick">닉네임</label>
       <input type="text" id="nick" maxlength="12" autocomplete="off">
+      <button class="btn ghost" id="saveNickname" type="button" style="margin-top:-5px;margin-bottom:8px">닉네임 저장</button>
       <div style="display:flex;align-items:center;gap:12px;margin:8px 0 12px">
         <div id="menuCarPreview" class="vehicle-photo menu-vehicle-photo"><img alt="선택한 드림카 공식 이미지"></div>
         <div style="flex:1;min-width:0"><div id="menuCarName" style="font-size:14px;font-weight:800">스트리트 쿠페</div><div style="font-size:12px;color:#64748b">나만의 레이싱 머신</div></div>
@@ -1213,6 +1214,22 @@ const accountStatusEl = document.getElementById('accountStatus');
 const googleLoginBtn = document.getElementById('googleLogin');
 const googleLogoutBtn = document.getElementById('googleLogout');
 const nickInput = document.getElementById('nick');
+document.getElementById('saveNickname').addEventListener('click', async () => {
+  const user=firebaseAuth.currentUser, next=nickInput.value.trim();
+  if(!user){accountStatusEl.textContent='먼저 Google 로그인을 해주세요.';return;}
+  if(next.length<2||next.length>12){accountStatusEl.textContent='닉네임은 2~12자로 입력해 주세요.';return;}
+  try{
+    const ref=doc(firestore,'users',user.uid), snap=await getDoc(ref), old=snap.exists()?snap.data().nickname:me.nick;
+    const data=snap.exists()?snap.data():{};
+    data.uid=user.uid;data.nickname=next;data.displayName=user.displayName||'';data.photoURL=user.photoURL||'';
+    data.vehicleColor=me.vehicleColor;data.vehicleModel=me.vehicleModel;data.wheelStyle=me.wheelStyle;data.spoiler=!!me.spoiler;
+    data.coins=me.coins;data.ownedVehicles=me.ownedVehicles;data.missionClaims=me.missionClaims;
+    data.bests=me.bests;data.dist=me.dist;data.laps=me.laps;data.lastLoginAt=serverTimestamp();
+    await reserveNicknameAndSaveProfile(ref,data,old);
+    me.nick=next;persistLocal();accountStatusEl.textContent='닉네임이 저장됐어요. 친구들이 이 이름으로 검색할 수 있어요.';
+  }catch(e){console.error(e);accountStatusEl.textContent=e.code==='nickname/taken'?'이미 사용 중인 닉네임이에요. 다른 이름을 선택해 주세요.':'닉네임 저장에 실패했어요. Firestore 보안 규칙을 확인해 주세요.';}
+});
+
 googleLoginBtn.addEventListener('click', async () => {
   googleLoginBtn.disabled = true;
   accountStatusEl.textContent = 'Google 로그인 창을 여는 중...';
