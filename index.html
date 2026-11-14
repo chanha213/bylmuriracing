@@ -961,7 +961,7 @@ function drawGhostCar() {
   const nick=String(ghostOpponent.nickname||'상대 레이서').slice(0,12);
   ctx.font='700 12px -apple-system,"Pretendard","Noto Sans KR",sans-serif';
   const w=Math.max(58,ctx.measureText(nick).width+18);
-  const lx=p.x, ly=p.y-30;
+  const lx=0, ly=-30;
   ctx.fillStyle='rgba(15,23,42,.88)';
   ctx.beginPath();ctx.roundRect(lx-w/2,ly-11,w,22,7);ctx.fill();
   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(nick,lx,ly);
