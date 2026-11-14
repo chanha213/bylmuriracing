@@ -342,13 +342,16 @@ let toastTimer = 0;
 
 /* ===================== 저장/공유 =====================*/
 const LS = 'droneRacer.v1';
-let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'street', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['street'], missionClaims:{} };
+let me = { nick:'', bests:{}, dist:{}, laps:{}, vehicleColor:'#2563eb', vehicleModel:'avanteN', wheelStyle:'street', spoiler:false, coins:0, ownedVehicles:['avanteN'], missionClaims:{} };
 try { const s = JSON.parse(localStorage.getItem(LS)||'null'); if (s) me = Object.assign(me, s); } catch(e){}
+const LEGACY_VEHICLE_IDS = { street:'avanteN', rally:'stinger', super:'gt3' };
+const migrateVehicleId = id => LEGACY_VEHICLE_IDS[id] || id;
+me.vehicleModel = migrateVehicleId(me.vehicleModel);
 me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
-me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['street', ...me.ownedVehicles])] : ['street'];
-if (['street','rally','super'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
+me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['avanteN', ...me.ownedVehicles.map(migrateVehicleId)])] : ['avanteN'];
+if (['avanteN','stinger','gt3','huracan'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
 me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
-if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'street';
+if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
 if (!me.nick) me.nick = 'Racer' + String(Math.floor(1000+Math.random()*9000));
 const persistLocal = () => { try { localStorage.setItem(LS, JSON.stringify(me)); } catch(e){} };
 
@@ -452,9 +455,14 @@ nickEl.value = me.nick;
 nickEl.addEventListener('change', () => { me.nick = (nickEl.value.trim() || me.nick).slice(0,12); nickEl.value = me.nick; pushMe(); renderLB(); });
 const garagePanel = $('garagePanel');
 const shopPanel = $('shopPanel');
-const vehicleNames = { street:'스트리트 쿠페', rally:'랠리 해치백', super:'슈퍼카' };
-const vehicleDescriptions = { street:'균형 잡힌 기본 차량', rally:'가속과 조향이 뛰어난 랠리 타입', super:'높은 최고속도와 강한 가속' };
-const vehiclePrices = { street:0, rally:1200, super:5000 };
+const vehicleNames = { avanteN:'현대 아반떼 N', stinger:'기아 스팅어 GT', gt3:'포르쉐 911 GT3', huracan:'람보르기니 우라칸 EVO' };
+const vehicleDescriptions = {
+  avanteN:'균형 잡힌 전륜 스포츠 세단 · 입문 차량',
+  stinger:'강한 가속과 높은 직선 주행 안정성',
+  gt3:'정교한 조향과 뛰어난 코너링 그립',
+  huracan:'최고속도와 가속력에 집중한 슈퍼 스포츠카'
+};
+const vehiclePrices = { avanteN:0, stinger:1800, gt3:4200, huracan:6800 };
 function renderWallet() {
   const label = '🪙 ' + me.coins.toLocaleString('ko-KR') + ' 코인';
   if ($('wallet')) $('wallet').textContent = label;
@@ -466,16 +474,21 @@ function paintVehicle(g, scale=1) {
   const L=92, W=42, color=me.vehicleColor||'#2563eb';
   const bodyPath=(inset=0)=>{
     g.beginPath();
-    if(me.vehicleModel==='rally'){
-      g.moveTo(-L/2+7+inset,-W/2+5+inset); g.lineTo(-L/2+18,-W/2+inset);
-      g.lineTo(L/2-15-inset,-W/2+inset); g.lineTo(L/2-5-inset,-W/2+8);
-      g.lineTo(L/2-inset,W/2-8); g.lineTo(L/2-15-inset,W/2-inset);
-      g.lineTo(-L/2+18,W/2-inset); g.lineTo(-L/2+7+inset,W/2-5-inset);
-    } else if(me.vehicleModel==='super'){
+    if(me.vehicleModel==='stinger'){
+      g.moveTo(-L/2+5+inset,-W/2+8+inset); g.lineTo(-L/2+17,-W/2+2+inset);
+      g.lineTo(L/2-18-inset,-W/2+2+inset); g.lineTo(L/2-3-inset,-W/2+7);
+      g.lineTo(L/2-inset,W/2-7); g.lineTo(L/2-18-inset,W/2-2-inset);
+      g.lineTo(-L/2+17,W/2-2-inset); g.lineTo(-L/2+5+inset,W/2-8-inset);
+    } else if(me.vehicleModel==='huracan'){
       g.moveTo(-L/2+3+inset,-W/2+7+inset); g.lineTo(-L/2+20,-W/2+2+inset);
       g.lineTo(L/2-18-inset,-W/2+3+inset); g.lineTo(L/2-inset,-W/2+10);
       g.lineTo(L/2-inset,W/2-10); g.lineTo(L/2-18-inset,W/2-3-inset);
       g.lineTo(-L/2+20,W/2-2-inset); g.lineTo(-L/2+3+inset,W/2-7-inset);
+    } else if(me.vehicleModel==='gt3'){
+      g.moveTo(-L/2+6+inset,-W/2+8+inset); g.lineTo(-L/2+19,-W/2+1+inset);
+      g.lineTo(L/2-15-inset,-W/2+1+inset); g.lineTo(L/2-2-inset,-W/2+8);
+      g.lineTo(L/2-inset,W/2-8); g.lineTo(L/2-15-inset,W/2-1-inset);
+      g.lineTo(-L/2+19,W/2-1-inset); g.lineTo(-L/2+6+inset,W/2-8-inset);
     } else {
       g.moveTo(-L/2+5+inset,-W/2+8+inset); g.lineTo(-L/2+17,-W/2+2+inset);
       g.lineTo(L/2-17-inset,-W/2+2+inset); g.lineTo(L/2-4-inset,-W/2+8);
@@ -687,7 +700,7 @@ function drawTrackCoins() {
 }
 function resetCar() {
   car.x = map.start.x; car.y = map.start.y; car.a = map.start.a; car.vx = car.vy = car.vf = car.vl = car.steer = 0;
-  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true };
+  lap = { times:[], pb:false, started:false, t0:0, n:0, last:null, best: (mapDef && !mapDef.custom) ? (me.bests[mapDef.id] ?? null) : null, dist:0, maxFar:0, visited:new Set(), prevS:0, clean:true, driftRotation:0, secretDrift:false, reverseDist:0, secretReverse:false };
   spawnTrackCoins();
   lap.prevS = (car.x - map.g.x)*map.n.x + (car.y - map.g.y)*map.n.y;
   raceT = 0; boostMeter = 1; boosting = false;
@@ -714,6 +727,12 @@ function finishRace() {
   }
   if (!mapDef.custom && lap.clean) {
     const n=claimMission('clean_finish_'+mapDef.id,150); if(n){reward+=n;rewardParts.push('무충돌 완주 최초 달성 +'+n);}
+  }
+  if (!mapDef.custom && lap.secretDrift) {
+    const n=claimMission('secret_360_drift',500); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 360도 드리프트 +'+n);}
+  }
+  if (!mapDef.custom && lap.secretReverse) {
+    const n=claimMission('secret_reverse_120',350); if(n){reward+=n;rewardParts.push('비밀 도전 발견 · 역주행 120m +'+n);}
   }
   me.coins += reward; persistLocal(); pushMe(); renderWallet(); renderGarage();
   $('rTitle').textContent = '레이스 완료 · ' + (mapDef.name || '');
@@ -769,9 +788,10 @@ $('file').onchange = async e => {
 /* ===================== 물리 =====================*/
 const MAXV = 480, ACC = 520, BRK = 900;
 const VEHICLE_STATS = {
-  street: { speed:1, accel:1, handling:1, grip:1 },
-  rally:  { speed:.96, accel:1.12, handling:1.13, grip:1.12 },
-  super:  { speed:1.12, accel:1.16, handling:.94, grip:.94 }
+  avanteN: { speed:1.00, accel:1.00, handling:1.05, grip:1.04 },
+  stinger: { speed:1.07, accel:1.10, handling:.98, grip:1.02 },
+  gt3:     { speed:1.08, accel:1.04, handling:1.16, grip:1.18 },
+  huracan: { speed:1.16, accel:1.14, handling:1.00, grip:.98 }
 };
 const roadAt = (x, y) => { x = (x/map.k)|0; y = (y/map.k)|0; return (x<0||y<0||x>=map.mw||y>=map.mh) ? 0 : map.mask[y*map.mw + x]; };
 const PROBES = [[.5,.42],[.5,-.42],[-.5,.42],[-.5,-.42],[.5,0],[-.5,0],[0,.45],[0,-.45]];
@@ -791,6 +811,7 @@ function stepCar(dt, inputOK) {
   const brk = inputOK && keys.brake, hand = inputOK && keys.hand;
   const tgt = inputOK ? ((keys.right?1:0) - (keys.left?1:0)) : 0;
   car.steer += (tgt - car.steer) * Math.min(1, dt*6.5);      // 부드러운 조향 입력
+  const angleBefore = car.a;
   let c = Math.cos(car.a), s = Math.sin(car.a);
   let vf = car.vx*c + car.vy*s, vl = -car.vx*s + car.vy*c;
   const stats = VEHICLE_STATS[me.vehicleModel] || VEHICLE_STATS.street;
@@ -799,7 +820,10 @@ function stepCar(dt, inputOK) {
   const baseMax = MAXV*stats.speed;
   const maxv = baseMax*(boosting ? 1.3 : 1);
   if (inputOK && !brk) vf += ACC*stats.accel*(boosting ? 2.2 : 1)*dt*Math.max(0, 1 - vf/maxv);   // 자동 전진
-  if (brk) vf = Math.max(0, vf - BRK*dt);
+  if (brk) {
+    if (vf > 8) vf = Math.max(0, vf - BRK*dt);
+    else vf = Math.max(-MAXV*0.28, vf - ACC*0.42*dt); // 완전히 멈춘 뒤 브레이크를 유지하면 후진 기어
+  }
   vf -= vf*0.45*dt;
   if (vf > maxv) vf -= (vf-maxv)*3*dt;
   const grip = hand ? 3 : 8.5*stats.grip;
@@ -807,6 +831,15 @@ function stepCar(dt, inputOK) {
   const sp = Math.min(1, Math.abs(vf)/baseMax);
   const rate = 2.3 * stats.handling * Math.max(0.4, Math.min(1, Math.abs(vf)/140)) * (1 - 0.3*sp) * (hand ? 1.3 : 1);
   car.a += car.steer * rate * dt;
+  const turnDelta = wrap(car.a - angleBefore);
+  if (mode === 'race') {
+    if (hand && Math.abs(vl) > 52 && Math.abs(vf) > 95) {
+      lap.driftRotation = (lap.driftRotation || 0) + Math.abs(turnDelta);
+      if (lap.driftRotation >= Math.PI*2) lap.secretDrift = true;
+    } else if (!hand || Math.abs(vf) < 70) {
+      lap.driftRotation = 0;
+    }
+  }
   c = Math.cos(car.a); s = Math.sin(car.a);
   car.vx = c*vf - s*vl; car.vy = s*vf + c*vl;
   const ox = car.x, oy = car.y;
@@ -829,6 +862,10 @@ function stepCar(dt, inputOK) {
   c = Math.cos(car.a); s = Math.sin(car.a);
   car.vf = car.vx*c + car.vy*s; car.vl = -car.vx*s + car.vy*c;
   const moved = Math.hypot(car.x-ox, car.y-oy);
+  if (mode === 'race' && car.vf < -70) {
+    lap.reverseDist = (lap.reverseDist || 0) + moved;
+    if (lap.reverseDist >= 120) lap.secretReverse = true;
+  }
   // 스키드마크
   if (Math.abs(car.vl) > 85 || (hand && Math.abs(car.vf) > 150)) {
     tg.strokeStyle = 'rgba(15,23,42,.28)'; tg.lineWidth = 3;
@@ -997,13 +1034,13 @@ onAuthStateChanged(firebaseAuth, async user => {
       }
       me.nick = (saved.nickname || nickInput.value.trim() || user.displayName || me.nick || '레이서').slice(0, 12);
       me.vehicleColor = typeof saved.vehicleColor === 'string' ? saved.vehicleColor : (me.vehicleColor || '#2563eb');
-      me.vehicleModel = ['street','rally','super'].includes(saved.vehicleModel) ? saved.vehicleModel : (me.vehicleModel || 'street');
+      me.vehicleModel = saved.vehicleModel ? migrateVehicleId(saved.vehicleModel) : (me.vehicleModel || 'avanteN');
       me.wheelStyle = ['street','sport','white'].includes(saved.wheelStyle) ? saved.wheelStyle : (me.wheelStyle || 'street');
       me.spoiler = typeof saved.spoiler === 'boolean' ? saved.spoiler : !!me.spoiler;
       if (typeof saved.coins === 'number') me.coins = Math.max(0, Math.floor(saved.coins));
-      me.ownedVehicles = [...new Set(['street', ...(me.ownedVehicles||[]), ...(Array.isArray(saved.ownedVehicles)?saved.ownedVehicles:[]), ...(saved.vehicleModel ? [saved.vehicleModel] : [])])];
+      me.ownedVehicles = [...new Set(['avanteN', ...(me.ownedVehicles||[]).map(migrateVehicleId), ...(Array.isArray(saved.ownedVehicles)?saved.ownedVehicles.map(migrateVehicleId):[]), ...(saved.vehicleModel ? [migrateVehicleId(saved.vehicleModel)] : [])])];
       me.missionClaims = Object.assign({}, me.missionClaims, saved.missionClaims || {});
-      if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'street';
+      if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
       nickInput.value = me.nick;
       persistLocal();
       const profile = {
