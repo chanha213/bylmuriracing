@@ -482,6 +482,7 @@ function renderGarage() {
     const id = b.dataset.model, owned = me.ownedVehicles.includes(id);
     b.classList.toggle('selected', id === me.vehicleModel);
     b.textContent = vehicleNames[id] + (owned ? ' · 보유' : ' · ' + vehiclePrices[id].toLocaleString('ko-KR') + ' 코인');
+    b.title = id==='street' ? '균형형 기본 차량' : (id==='rally' ? '가속·조향 강화, 최고속도 약간 낮음' : '최고속도·가속 강화, 조향 안정성은 낮음');
     b.style.opacity = owned ? '1' : '.78';
   });
   renderWallet();
@@ -614,8 +615,8 @@ function claimMission(key, amount) {
 function finishRace() {
   mode = 'finish'; flushDist(false); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
   const tot = lap.times.reduce((a,b)=>a+b,0), bestRun = Math.min(...lap.times);
-  let reward = 30 + raceCoins;
-  const rewardParts = ['완주 +30', '코인 수집 +' + raceCoins];
+  let reward = mapDef.custom ? 0 : 30 + raceCoins;
+  const rewardParts = mapDef.custom ? ['연습 맵 · 보상 없음'] : ['완주 +30', '코인 수집 +' + raceCoins];
   if (!mapDef.custom && mapDef.id === 'hoecho') {
     if (lap.times.some(t=>t<=10000)) {
       const n=claimMission('hoecho_sub10_lap',100); if(n){reward+=n;rewardParts.push('10초 이내 랩 최초 달성 +'+n);}
