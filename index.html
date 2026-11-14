@@ -612,7 +612,7 @@ function claimMission(key, amount) {
   return amount;
 }
 function finishRace() {
-  mode = 'finish'; flushDist(); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
+  mode = 'finish'; flushDist(false); keys.left = keys.right = keys.brake = keys.boost = keys.hand = false;
   const tot = lap.times.reduce((a,b)=>a+b,0), bestRun = Math.min(...lap.times);
   let reward = 30 + raceCoins;
   const rewardParts = ['완주 +30', '코인 수집 +' + raceCoins];
@@ -642,9 +642,10 @@ function toMenu() {
   flushDist(); mode = 'menu'; $('menu').style.display = 'flex'; $('touch').style.display = 'none';
   renderMaps(); renderLB(); renderNotice();
 }
-function flushDist() {
+function flushDist(save=true) {
   if (!mapDef || mapDef.custom || unsavedDist < 5) { return; }
-  me.dist[mapDef.id] = (me.dist[mapDef.id]||0) + unsavedDist * M_PER_PX; unsavedDist = 0; pushMe();
+  me.dist[mapDef.id] = (me.dist[mapDef.id]||0) + unsavedDist * M_PER_PX; unsavedDist = 0;
+  if (save) pushMe();
 }
 
 /* ===================== 입력 =====================*/
@@ -912,7 +913,7 @@ onAuthStateChanged(firebaseAuth, async user => {
       me.wheelStyle = ['street','sport','white'].includes(saved.wheelStyle) ? saved.wheelStyle : (me.wheelStyle || 'street');
       me.spoiler = typeof saved.spoiler === 'boolean' ? saved.spoiler : !!me.spoiler;
       if (typeof saved.coins === 'number') me.coins = Math.max(0, Math.floor(saved.coins));
-      me.ownedVehicles = [...new Set(['street', ...(me.ownedVehicles||[]), ...(Array.isArray(saved.ownedVehicles)?saved.ownedVehicles:[])])];
+      me.ownedVehicles = [...new Set(['street', ...(me.ownedVehicles||[]), ...(Array.isArray(saved.ownedVehicles)?saved.ownedVehicles:[]), ...(saved.vehicleModel ? [saved.vehicleModel] : [])])];
       me.missionClaims = Object.assign({}, me.missionClaims, saved.missionClaims || {});
       if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'street';
       nickInput.value = me.nick;
