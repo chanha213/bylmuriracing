@@ -391,7 +391,7 @@ function normalizeMe() {
   me.vehicleModel = migrateVehicleId(me.vehicleModel);
   me.coins = Number.isFinite(me.coins) ? Math.max(0, Math.floor(me.coins)) : 0;
   me.ownedVehicles = Array.isArray(me.ownedVehicles) ? [...new Set(['avanteN', ...me.ownedVehicles.map(migrateVehicleId)])] : ['avanteN'];
-  if (['avanteN','stinger','gt3','huracan'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
+  if (['avanteN','stinger','gt3','huracan','cybertruck'].includes(me.vehicleModel) && !me.ownedVehicles.includes(me.vehicleModel)) me.ownedVehicles.push(me.vehicleModel);
   me.missionClaims = me.missionClaims && typeof me.missionClaims === 'object' ? me.missionClaims : {};
   me.ghosts = me.ghosts && typeof me.ghosts === 'object' ? me.ghosts : {};
   if (!me.ownedVehicles.includes(me.vehicleModel)) me.vehicleModel = 'avanteN';
@@ -521,27 +521,30 @@ nickEl.value = me.nick;
 nickEl.addEventListener('change', () => { me.nick = (nickEl.value.trim() || me.nick).slice(0,12); nickEl.value = me.nick; pushMe(); renderLB(); });
 const garagePanel = $('garagePanel');
 const shopPanel = $('shopPanel');
-const vehicleNames = { avanteN:'현대 아반떼 N', stinger:'기아 스팅어 GT', gt3:'포르쉐 911 GT3', huracan:'람보르기니 우라칸 EVO' };
+const vehicleNames = { avanteN:'현대 아반떼 N', stinger:'기아 스팅어 GT', gt3:'포르쉐 911 GT3', huracan:'람보르기니 우라칸 EVO', cybertruck:'테슬라 사이버트럭' };
 const vehicleDescriptions = {
   avanteN:'균형 잡힌 전륜 스포츠 세단 · 입문 차량',
   stinger:'강한 가속과 높은 직선 주행 안정성',
   gt3:'정교한 조향과 뛰어난 코너링 그립',
-  huracan:'최고속도와 가속력에 집중한 슈퍼 스포츠카'
+  huracan:'최고속도와 가속력에 집중한 슈퍼 스포츠카',
+  cybertruck:'각진 스테인리스 차체와 강력한 전기 픽업 · 묵직한 안정감'
 };
-const vehiclePrices = { avanteN:0, stinger:1800, gt3:4200, huracan:6800 };
+const vehiclePrices = { avanteN:0, stinger:1800, gt3:4200, huracan:6800, cybertruck:5200 };
 // Temporary account-only testing access. Remove this nickname rule after testing.
 const isVehicleTestAccount = () => (me.nick || '').trim() === '피아오';
 const VEHICLE_PHOTOS = {
   avanteN: 'https://www.hyundaimotorgroup.com/image/upload/asset_library/MDA00000000000004716/96a14c801f904579a62198a970d1adb9.jpg',
   stinger: 'https://mnd-assets.mynewsdesk.com/image/upload/c_fill%2Cdpr_auto%2Cf_auto%2Cg_auto%2Cq_auto%3Agood%2Cw_746/qcfijudyy7a6q41zenkp',
   gt3: 'https://porschepictures.flowcenter.de/pmdb/thumbnail.cgi?crop=1&cs=26dad879ffb42d4c&h=812&id=305547&public=1&w=1440',
-  huracan: 'https://www.lamborghini.com/sites/it-en/files/DAM/lamborghini/news/2020/01_04_evo_rwd/04.jpg'
+  huracan: 'https://www.lamborghini.com/sites/it-en/files/DAM/lamborghini/news/2020/01_04_evo_rwd/04.jpg',
+  cybertruck: 'https://www.tesla.com/sites/default/files/images/cybertruck/cybertruck-social.jpg'
 };
 const VEHICLE_PHOTO_CREDITS = {
   avanteN: 'Hyundai Motor Group',
   stinger: 'Kia Sweden / Mynewsdesk',
   gt3: 'Porsche AG',
-  huracan: 'Automobili Lamborghini'
+  huracan: 'Automobili Lamborghini',
+  cybertruck: 'Tesla'
 };
 function renderWallet() {
   const label = '🪙 ' + me.coins.toLocaleString('ko-KR') + ' 코인';
@@ -555,11 +558,17 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
   const vehicleSpoiler=customization?.spoiler ?? me.spoiler;
   const id = modelId || 'avanteN';
   const L=92, W=42, color=colorOverride||me.vehicleColor||'#2563eb';
-  const isStinger=id==='stinger', isGT3=id==='gt3', isHuracan=id==='huracan';
+  const isStinger=id==='stinger', isGT3=id==='gt3', isHuracan=id==='huracan', isCybertruck=id==='cybertruck';
   // 각 차종의 실제 비례를 반영한 차체 실루엣
   const bodyPath=(inset=0)=>{
     g.beginPath();
-    if(isGT3){
+    if(isCybertruck){
+      g.moveTo(-L/2+2+inset,-W/2+5+inset); g.lineTo(-L/2+24,-W/2+2+inset);
+      g.lineTo(-4,-W/2+2+inset); g.lineTo(18,-W/2+8+inset);
+      g.lineTo(L/2-inset,-W/2+8+inset); g.lineTo(L/2-inset,W/2-8-inset);
+      g.lineTo(18,W/2-8-inset); g.lineTo(-4,W/2-2-inset);
+      g.lineTo(-L/2+24,W/2-2-inset); g.lineTo(-L/2+2+inset,W/2-5-inset);
+    } else if(isGT3){
       g.moveTo(-L/2+8+inset,-W/2+8+inset); g.quadraticCurveTo(-L/2+1,-W/2+1,-L/2+17,-W/2+1+inset);
       g.lineTo(L/2-15-inset,-W/2+1+inset); g.quadraticCurveTo(L/2+1,-W/2+2,L/2-inset,-W/2+10);
       g.lineTo(L/2-inset,W/2-10); g.quadraticCurveTo(L/2+1,W/2-2,L/2-15-inset,W/2-1-inset);
@@ -585,7 +594,7 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
   // 그림자와 차종별 차폭
   g.fillStyle='rgba(15,23,42,.32)'; g.beginPath(); g.ellipse(3,7,isHuracan?48:49,isGT3?24:25,0,0,Math.PI*2); g.fill();
   const wheelColor=vehicleWheelStyle==='white'?'#f8fafc':(vehicleWheelStyle==='sport'?'#111827':'#334155');
-  const wheelXs=isHuracan?[-25,22]:isGT3?[-27,20]:[-25,20];
+  const wheelXs=(isHuracan||isCybertruck)?[-27,20]:isGT3?[-27,20]:[-25,20];
   wheelXs.forEach(x=>[-1,1].forEach(side=>{
     const y=side<0?-W/2-2:W/2-8;
     g.fillStyle='#090f1c'; g.beginPath(); g.roundRect(x,y+3,16,10,4); g.fill();
@@ -612,7 +621,8 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
   // 보닛과 펜더: 아반떼N은 각진 보닛, 스팅어는 긴 후드, GT3는 둥근 펜더, 우라칸은 쐐기형
   g.strokeStyle='rgba(255,255,255,.34)'; g.lineWidth=1.3;
   g.beginPath();
-  if(isHuracan){ g.moveTo(-8,-14); g.lineTo(31,-9); g.moveTo(-8,14); g.lineTo(31,9); }
+  if(isCybertruck){ g.moveTo(-43,-15); g.lineTo(-8,-16); g.lineTo(8,-11); g.lineTo(42,-10); g.moveTo(-43,15); g.lineTo(-8,16); g.lineTo(8,11); g.lineTo(42,10); }
+  else if(isHuracan){ g.moveTo(-8,-14); g.lineTo(31,-9); g.moveTo(-8,14); g.lineTo(31,9); }
   else if(isGT3){ g.moveTo(-17,-14); g.quadraticCurveTo(8,-19,34,-12); g.moveTo(-17,14); g.quadraticCurveTo(8,19,34,12); }
   else if(isStinger){ g.moveTo(-29,-15); g.quadraticCurveTo(3,-18,35,-12); g.moveTo(-29,15); g.quadraticCurveTo(3,18,35,12); }
   else { g.moveTo(-25,-15); g.lineTo(31,-13); g.moveTo(-25,15); g.lineTo(31,13); }
@@ -620,7 +630,9 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
 
   // 차종별 유리 면적과 루프 라인
   g.fillStyle='#101c2d'; g.beginPath();
-  if(isHuracan){
+  if(isCybertruck){
+    g.moveTo(-27,-14); g.lineTo(-7,-14); g.lineTo(5,-9); g.lineTo(5,9); g.lineTo(-7,14); g.lineTo(-27,14); g.lineTo(-36,8); g.lineTo(-36,-8);
+  } else if(isHuracan){
     g.moveTo(-10,-13); g.lineTo(16,-12); g.lineTo(27,-7); g.lineTo(27,7); g.lineTo(16,12); g.lineTo(-10,13); g.lineTo(-19,7); g.lineTo(-19,-7);
   } else if(isGT3){
     g.moveTo(-19,-14); g.quadraticCurveTo(-7,-17,12,-14); g.lineTo(24,-8); g.lineTo(24,8); g.lineTo(12,14); g.quadraticCurveTo(-7,17,-19,14); g.lineTo(-26,8); g.lineTo(-26,-8);
@@ -638,7 +650,10 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
   g.fillStyle='rgba(255,255,255,.19)'; g.beginPath(); g.moveTo(-21,-7); g.lineTo(-12,-12); g.lineTo(-4,-12); g.lineTo(-13,11); g.closePath(); g.fill();
 
   // 전면부: 우라칸의 날카로운 Y형 램프, GT3 원형에 가까운 램프, 스팅어 넓은 그릴
-  if(isHuracan){
+  if(isCybertruck){
+    g.fillStyle='#e2e8f0'; g.shadowColor='#f8fafc'; g.shadowBlur=5; g.fillRect(39,-13,5,26); g.shadowBlur=0;
+    g.fillStyle='#111827'; g.fillRect(36,-8,8,16);
+  } else if(isHuracan){
     g.strokeStyle='#e5f3ff'; g.lineWidth=2.2; g.beginPath(); g.moveTo(34,-13); g.lineTo(40,-8); g.lineTo(35,-4); g.moveTo(34,13); g.lineTo(40,8); g.lineTo(35,4); g.stroke();
     g.fillStyle='#111827'; g.beginPath(); g.moveTo(38,-5); g.lineTo(45,-3); g.lineTo(45,3); g.lineTo(38,5); g.closePath(); g.fill();
   } else if(isGT3){
@@ -676,6 +691,14 @@ function paintVehicle(g, scale=1, modelId=me.vehicleModel, colorOverride=null, c
     g.fillStyle='#111827';
   });
 
+  // 사이버트럭의 적재함 패널과 각진 펜더 라인
+  if(isCybertruck){
+    g.strokeStyle='rgba(15,23,42,.72)'; g.lineWidth=1.5;
+    g.beginPath(); g.moveTo(-5,-17); g.lineTo(42,-17); g.lineTo(42,17); g.moveTo(-5,17); g.lineTo(-5,-17); g.stroke();
+    g.strokeStyle='rgba(255,255,255,.42)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(-42,-8); g.lineTo(-28,-13); g.lineTo(-17,-13); g.moveTo(-42,8); g.lineTo(-28,13); g.lineTo(-17,13); g.stroke();
+    g.fillStyle='rgba(15,23,42,.75)'; g.fillRect(-3,-17,2,34);
+  }
   // 도어 경계, 손잡이와 사이드 캐릭터 라인
   g.strokeStyle='rgba(8,15,28,.58)'; g.lineWidth=.9;
   g.beginPath();
@@ -1139,7 +1162,8 @@ const VEHICLE_STATS = {
   avanteN: { speed:1.00, accel:1.00, handling:1.05, grip:1.04 },
   stinger: { speed:1.07, accel:1.10, handling:.98, grip:1.02 },
   gt3:     { speed:1.08, accel:1.04, handling:1.16, grip:1.18 },
-  huracan: { speed:1.16, accel:1.14, handling:1.00, grip:.98 }
+  huracan: { speed:1.16, accel:1.14, handling:1.00, grip:.98 },
+  cybertruck: { speed:1.05, accel:1.12, handling:.91, grip:1.12 }
 };
 const roadAt = (x, y) => { x = (x/map.k)|0; y = (y/map.k)|0; return (x<0||y<0||x>=map.mw||y>=map.mh) ? 0 : map.mask[y*map.mw + x]; };
 const PROBES = [[.5,.42],[.5,-.42],[-.5,.42],[-.5,-.42],[.5,0],[-.5,0],[0,.45],[0,-.45]];
