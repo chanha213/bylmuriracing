@@ -1419,7 +1419,9 @@ function render() {
   ctx.fillStyle = map.flat ? '#4f8d5d' : '#d9e4d3'; ctx.fillRect(0, 0, VW, VH);
   ctx.save();
   const zm = (map.zoom || 1) * 1.5;
-  ctx.translate(VW/2, VH*0.64); ctx.scale(zm, zm); ctx.rotate(theta); ctx.translate(-cx, -cy);
+  // 75도 카메라 피치: 지면을 화면 세로축으로 원근 압축해 살짝 비스듬한 2.5D 시점 구현
+  const pitch = 75 * Math.PI / 180;
+  ctx.translate(VW/2, VH*0.64); ctx.scale(zm, zm); ctx.rotate(theta); ctx.scale(1, Math.sin(pitch)); ctx.translate(-cx, -cy);
   const R = Math.min(2400, 640/zm), sx0 = Math.max(0, Math.floor(cx-R)), sy0 = Math.max(0, Math.floor(cy-R));
   const sw = Math.min(map.W, Math.ceil(cx+R)) - sx0, sh = Math.min(map.H, Math.ceil(cy+R)) - sy0;
   if (sw > 0 && sh > 0) { const kk = map.k; ctx.drawImage(map.world, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); ctx.drawImage(trail, sx0/kk, sy0/kk, sw/kk, sh/kk, sx0, sy0, sw, sh); }
