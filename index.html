@@ -254,6 +254,9 @@ const firebaseApp = initializeApp(firebaseConfig);
 const firebaseAuth = getAuth(firebaseApp);
 const firestore = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
+// 관리자 계정은 Google 로그인 이메일로 판별한다. Firestore 보안 규칙에서도 동일 이메일을 검증해야 한다.
+const ADMIN_EMAILS = ['1010@bmrschool.org'];
+let isAdmin = false;
 window.byulmuriAuth = firebaseAuth;
 
 (() => {
@@ -1655,11 +1658,13 @@ onSnapshot(collection(firestore, 'leaderboard'), snap => {
 });
 onAuthStateChanged(firebaseAuth, async user => {
   const sessionToken = ++authSessionToken;
+  isAdmin = !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+  document.documentElement.dataset.admin = isAdmin ? 'true' : 'false';
   if (user) {
     // Keep each Google account's local racing data in a separate browser storage slot.
     switchLocalAccount(user.uid);
     startFriendListeners(user);
-    accountStatusEl.textContent = (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요. 프로필 저장 중...';
+    accountStatusEl.textContent = (isAdmin ? '관리자 인증 완료 · ' : '') + (user.displayName || user.email || 'Google 사용자') + ' 계정으로 로그인했어요. 프로필 저장 중...';
     googleLoginBtn.style.display = 'none';
     googleLogoutBtn.style.display = 'block';
     if (user.displayName && !nickInput.value.trim()) nickInput.value = user.displayName.slice(0, 12);
