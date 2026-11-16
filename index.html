@@ -377,16 +377,27 @@ function buildMap(src, sw, sh, bg, kIn, flat, styleId) {
   const oc = document.createElement('canvas'); oc.width = W; oc.height = H; oc.getContext('2d').putImageData(out, 0, 0);
   if (bg) { wg.drawImage(bg, 0, 0, W, H); if (!flat) { wg.fillStyle = 'rgba(248,250,252,.16)'; wg.fillRect(0, 0, W, H); } }
   wg.drawImage(oc, 0, 0);
-  // 회초 농구장 랜드마크: 코트 바닥과 정식 라인, 센터서클, 페인트존, 골대
+  // 회초 농구장: 주변 지도와 같은 짙은 회색 아스팔트, 골밑 반원 페인트는 주황색
   if (styleId === 'hoecho') {
     wg.save();
     wg.translate(758, 650);
     wg.rotate(-0.045);
     const cw=154, ch=286, x=-cw/2, y=-ch/2;
-    wg.shadowColor='rgba(15,23,42,.32)'; wg.shadowBlur=10; wg.shadowOffsetY=5;
-    wg.fillStyle='rgba(22,42,48,.72)'; wg.fillRect(x-5,y-5,cw+10,ch+10);
+    wg.shadowColor='rgba(15,23,42,.28)'; wg.shadowBlur=7; wg.shadowOffsetY=3;
+    wg.fillStyle='rgba(71,78,88,.98)'; wg.fillRect(x-3,y-3,cw+6,ch+6);
     wg.shadowColor='transparent'; wg.shadowBlur=0; wg.shadowOffsetY=0;
-    wg.fillStyle='rgba(190,112,83,.88)'; wg.fillRect(x,y,cw,ch);
+    wg.fillStyle='rgba(82,89,99,.98)'; wg.fillRect(x,y,cw,ch);
+    // 양쪽 골대 아래 자유투 사각형과 반원 내부를 주황색으로 채움
+    for (const side of [-1,1]) {
+      const by=side*(ch/2-2);
+      const boxY=side<0 ? y+2 : ch/2-94;
+      wg.fillStyle='rgba(232,126,45,.96)';
+      wg.fillRect(-34,boxY,68,92);
+      wg.beginPath();
+      if (side<0) { wg.moveTo(-34,boxY+92); wg.lineTo(34,boxY+92); wg.lineTo(34,by); wg.arc(0,by,34,0,Math.PI,true); }
+      else { wg.moveTo(-34,boxY); wg.lineTo(34,boxY); wg.lineTo(34,by); wg.arc(0,by,34,0,Math.PI,false); }
+      wg.closePath(); wg.fill();
+    }
     wg.strokeStyle='rgba(255,255,255,.96)'; wg.lineWidth=3.2;
     wg.strokeRect(x+2,y+2,cw-4,ch-4);
     wg.beginPath(); wg.moveTo(x+2,0); wg.lineTo(x+cw-2,0); wg.stroke();
@@ -400,7 +411,6 @@ function buildMap(src, sw, sh, bg, kIn, flat, styleId) {
       wg.beginPath(); wg.arc(0, by+(side<0?23:-23), 8, 0, Math.PI*2); wg.stroke();
     }
     wg.beginPath(); wg.arc(0,0,12,0,Math.PI*2); wg.stroke();
-    wg.beginPath(); wg.moveTo(-12,0); wg.quadraticCurveTo(0,-5,12,0); wg.moveTo(0,-12); wg.quadraticCurveTo(-5,0,0,12); wg.stroke();
     wg.restore();
   }
   // 회초 전용 노면 디테일: 중앙 유도선과 부드러운 코너 가이드
